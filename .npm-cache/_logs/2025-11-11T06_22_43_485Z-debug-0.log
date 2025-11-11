@@ -1,0 +1,70 @@
+0 verbose cli D:\VScode\Node.js\node.exe D:\VScode\Node.js\node_modules\npm\bin\npm-cli.js
+1 info using npm@10.9.2
+2 info using node@v22.17.1
+3 silly config load:file:D:\VScode\Node.js\node_modules\npm\npmrc
+4 silly config load:file:E:\cursor\校园活动管理系统\.npmrc
+5 silly config load:file:C:\Users\ASUS\.npmrc
+6 silly config load:file:D:\VScode\Node.js\etc\npmrc
+7 verbose title npm create vue@latest standard-vue
+8 verbose argv "create" "vue@latest" "standard-vue" "--default"
+9 verbose logfile logs-max:10 dir:E:\cursor\校园活动管理系统\.npm-cache\_logs\2025-11-11T06_22_43_485Z-
+10 verbose logfile E:\cursor\校园活动管理系统\.npm-cache\_logs\2025-11-11T06_22_43_485Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4345298944 maxSize:1086324736 maxEntrySize:543162368
+13 http fetch GET 200 https://registry.npmmirror.com/npm 102ms
+14 http fetch GET 200 https://registry.npmmirror.com/create-vue 86ms (cache miss)
+15 silly packumentCache heap:4345298944 maxSize:1086324736 maxEntrySize:543162368
+16 warn exec The following package was not found and will be installed: create-vue@3.18.2
+17 silly idealTree buildDeps
+18 silly fetch manifest create-vue@3.18.2
+19 silly packumentCache full:https://registry.npmmirror.com/create-vue cache-miss
+20 http fetch GET 200 https://registry.npmmirror.com/create-vue 23ms (cache miss)
+21 silly packumentCache full:https://registry.npmmirror.com/create-vue set size:75480 disposed:false
+22 silly placeDep ROOT create-vue@3.18.2 OK for:  want: 3.18.2
+23 silly reify moves {}
+24 silly audit bulk request { 'create-vue': [ '3.18.2' ] }
+25 http cache create-vue@https://registry.npmmirror.com/create-vue/-/create-vue-3.18.2.tgz 1ms (cache hit)
+26 silly tarball no local data for create-vue@https://registry.npmmirror.com/create-vue/-/create-vue-3.18.2.tgz. Extracting by manifest.
+27 http fetch POST 404 https://registry.npmmirror.com/-/npm/v1/security/advisories/bulk 14ms
+28 silly audit bulk request failed [object Object]
+29 http fetch POST 404 https://registry.npmmirror.com/-/npm/v1/security/audits/quick 9ms
+30 verbose audit error HttpErrorGeneral: 404 Not Found - POST https://registry.npmmirror.com/-/npm/v1/security/audits/quick - [NOT_IMPLEMENTED] /-/npm/v1/security/* not implemented yet
+30 verbose audit error     at D:\VScode\Node.js\node_modules\npm\node_modules\npm-registry-fetch\lib\check-response.js:103:15
+30 verbose audit error     at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+30 verbose audit error     at async [getReport] (D:\VScode\Node.js\node_modules\npm\node_modules\@npmcli\arborist\lib\audit-report.js:336:21)
+30 verbose audit error     at async AuditReport.run (D:\VScode\Node.js\node_modules\npm\node_modules\@npmcli\arborist\lib\audit-report.js:106:19) {
+30 verbose audit error   headers: [Object: null prototype] {
+30 verbose audit error     server: [ 'Tengine' ],
+30 verbose audit error     date: [ 'Tue, 11 Nov 2025 06:22:45 GMT' ],
+30 verbose audit error     'content-type': [ 'application/json' ],
+30 verbose audit error     'transfer-encoding': [ 'chunked' ],
+30 verbose audit error     connection: [ 'keep-alive' ],
+30 verbose audit error     'strict-transport-security': [ 'max-age=5184000' ],
+30 verbose audit error     via: [ 'kunlun2.cn7967[,404666]' ],
+30 verbose audit error     'timing-allow-origin': [ '*' ],
+30 verbose audit error     eagleid: [ '7abe0c9617628421659673747e' ],
+30 verbose audit error     'x-fetch-attempts': [ '1' ]
+30 verbose audit error   },
+30 verbose audit error   statusCode: 404,
+30 verbose audit error   code: 'E404',
+30 verbose audit error   method: 'POST',
+30 verbose audit error   uri: 'https://registry.npmmirror.com/-/npm/v1/security/audits/quick',
+30 verbose audit error   body: {
+30 verbose audit error     error: '[NOT_IMPLEMENTED] /-/npm/v1/security/* not implemented yet'
+30 verbose audit error   },
+30 verbose audit error   pkgid: undefined
+30 verbose audit error }
+31 silly audit error [object Object]
+32 silly audit report null
+33 http fetch GET 200 https://cdn.npmmirror.com/packages/create-vue/3.18.2/create-vue-3.18.2.tgz 428ms (cache miss)
+34 verbose cwd E:\cursor\校园活动管理系统
+35 verbose os Windows_NT 10.0.26100
+36 verbose node v22.17.1
+37 verbose npm  v10.9.2
+38 notice
+38 notice New major version of npm available! 10.9.2 -> 11.6.2
+38 notice Changelog: https://github.com/npm/cli/releases/tag/v11.6.2
+38 notice To update run: npm install -g npm@11.6.2
+38 notice  { force: true, [Symbol(proc-log.meta)]: true }
+39 verbose exit 0
+40 info ok

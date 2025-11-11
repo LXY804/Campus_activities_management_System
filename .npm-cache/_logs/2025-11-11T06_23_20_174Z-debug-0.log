@@ -1,0 +1,21 @@
+0 verbose cli D:\VScode\Node.js\node.exe D:\VScode\Node.js\node_modules\npm\bin\npm-cli.js
+1 info using npm@10.9.2
+2 info using node@v22.17.1
+3 silly config load:file:D:\VScode\Node.js\node_modules\npm\npmrc
+4 silly config load:file:E:\cursor\校园活动管理系统\.npmrc
+5 silly config load:file:C:\Users\ASUS\.npmrc
+6 silly config load:file:D:\VScode\Node.js\etc\npmrc
+7 verbose title npm init vue@latest standard-vue
+8 verbose argv "init" "vue@latest" "standard-vue" "--default"
+9 verbose logfile logs-max:10 dir:E:\cursor\校园活动管理系统\.npm-cache\_logs\2025-11-11T06_23_20_174Z-
+10 verbose logfile E:\cursor\校园活动管理系统\.npm-cache\_logs\2025-11-11T06_23_20_174Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4345298944 maxSize:1086324736 maxEntrySize:543162368
+13 http fetch GET 200 https://registry.npmmirror.com/create-vue 82ms (cache revalidated)
+14 silly packumentCache heap:4345298944 maxSize:1086324736 maxEntrySize:543162368
+15 verbose cwd E:\cursor\校园活动管理系统
+16 verbose os Windows_NT 10.0.26100
+17 verbose node v22.17.1
+18 verbose npm  v10.9.2
+19 verbose exit 0
+20 info ok
