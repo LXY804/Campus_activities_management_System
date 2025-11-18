@@ -1,162 +1,166 @@
 <template>
-  <div class="login-page">
-    <div class="login-container">
-      <div class="login-header">
-        <h1>校园活动管理系统</h1>
-        <p>欢迎登录</p>
+  <div class="page">
+    <NavBar />
+    <section class="hero">
+      <div class="container hero__inner">
+        <h1 class="hero__title">欢迎访问<br/>校园活动管理平台</h1>
+        <p class="hero__subtitle">Welcome to the Campus Event Management Platform</p>
       </div>
-      <form class="login-form" @submit.prevent="handleLogin">
-        <div class="form-group">
-          <label>用户名</label>
-          <input 
-            v-model="form.username" 
-            type="text" 
-            placeholder="请输入用户名"
-            required
-          />
-        </div>
-        <div class="form-group">
-          <label>密码</label>
-          <input 
-            v-model="form.password" 
-            type="password" 
-            placeholder="请输入密码"
-            required
-          />
-        </div>
-        <button type="submit" class="login-btn">登录</button>
-      </form>
-    </div>
+      <div class="form-wrapper">
+        <AuthForm />
+      </div>
+    </section>
+    <section class="stats">
+      <div class="container stats__grid">
+        <div class="stat"><div class="stat__number">200+</div><div class="stat__label">院校资源</div></div>
+        <div class="stat"><div class="stat__number">3500+</div><div class="stat__label">活动总数</div></div>
+        <div class="stat"><div class="stat__number">5万+</div><div class="stat__label">参与人数</div></div>
+        <div class="stat"><div class="stat__number">1000+</div><div class="stat__label">活动评价</div></div>
+      </div>
+    </section>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
-const form = ref({
-  username: '',
-  password: ''
-})
-
-const mockUsers = {
-  organizer: {
-    password: '123456',
-    role: 'organizer'
-  },
-  admin: {
-    password: '123456',
-    role: 'admin'
-  }
-}
-
-const handleLogin = () => {
-  const { username, password } = form.value
-  const matchedUser = mockUsers[username]
-
-  if (!matchedUser) {
-    window.alert('账号不存在，请检查用户名')
-    return
-  }
-
-  if (matchedUser.password !== password) {
-    window.alert('密码错误，请重新输入')
-    return
-  }
-
-  localStorage.setItem('isLoggedIn', 'true')
-  localStorage.setItem('username', username)
-  localStorage.setItem('userRole', matchedUser.role)
-  router.push('/')
-}
+import NavBar from '@/components/NavBar.vue'
+import AuthForm from '@/components/AuthForm.vue'
 </script>
 
 <style scoped>
-.login-page {
-  min-height: 100vh;
+.page {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100dvh;
+  background: #f7f9fc;
+}
+
+.container {
+  width: 100%;
+  max-width: 1200px;
+  padding: 0 16px;
+  margin: 0 auto;
+}
+
+.hero {
+  background: linear-gradient(180deg, rgba(159, 159, 165, 0.1) 0%, rgba(175, 176, 177, 0.5) 100%), url(../assets/R-C.jpeg) center/cover no-repeat;
+  color: #fff;
   display: flex;
   align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  justify-content: space-between;
+  padding: 0;
+  flex: 1;
+  position: relative;
 }
 
-.login-container {
+.hero__inner {
+  max-width: 980px;
+  flex: 1;
+  padding: 60px 16px;
+}
+
+.hero__title {
+  font-size: 48px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  font-weight: 800;
+}
+
+.hero__subtitle {
+  font-size: 16px;
+  opacity: 0.95;
+}
+
+.form-wrapper {
+  width: 100%;
+  max-width: 350px;
   background: white;
-  padding: 40px;
+  padding: 80px 40px;
   border-radius: 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-  width: 100%;
-  max-width: 400px;
+  margin-right: 60px;
+  flex-shrink: 0;
 }
 
-.login-header {
+.stats {
+  background: #1565c0;
+  color: #fff;
+  padding: 16px 0;
+  border-top: 4px solid rgba(255, 255, 255, 0.2);
+}
+
+.stats__grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
   text-align: center;
-  margin-bottom: 30px;
 }
 
-.login-header h1 {
+.stat {
+  padding: 12px 8px;
+  border-left: 2px solid rgba(255, 255, 255, 0.25);
+}
+
+.stat:first-child {
+  border-left: none;
+}
+
+.stat__number {
   font-size: 28px;
-  color: #333;
-  margin-bottom: 8px;
+  font-weight: 800;
+  margin-bottom: 4px;
 }
 
-.login-header p {
-  color: #666;
+.stat__label {
   font-size: 14px;
+  opacity: 0.9;
 }
 
-.login-form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+@media (max-width: 1200px) {
+  .form-wrapper {
+    margin-right: 20px;
+  }
 }
 
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+@media (max-width: 768px) {
+  .hero {
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .hero__inner {
+    padding: 40px 16px;
+  }
+
+  .hero__title {
+    font-size: 34px;
+  }
+
+  .form-wrapper {
+    width: calc(100% - 40px);
+    margin: 20px;
+    padding: 40px 20px;
+  }
+
+  .stats__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
-.form-group label {
-  font-size: 14px;
-  color: #333;
-  font-weight: 500;
-}
+@media (max-width: 480px) {
+  .form-wrapper {
+    max-width: 100%;
+    margin: 20px;
+    width: calc(100% - 40px);
+    padding: 30px 20px;
+  }
 
-.form-group input {
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 14px;
-  transition: border-color 0.3s;
-}
+  .hero__title {
+    font-size: 28px;
+  }
 
-.form-group input:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
-.login-btn {
-  padding: 12px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
-  margin-top: 10px;
-}
-
-.login-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-}
-
-.login-btn:active {
-  transform: translateY(0);
+  .stats__grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
 
