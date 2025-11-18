@@ -2,7 +2,7 @@
     <header class="topbar">
       <div class="container topbar__inner">
         <div class="brand">
-          <span class="brand__name">武汉理工大学</span>
+          <img class="brand__logo" src="@/assets/header-logo.png" alt="武汉理工大学">
         </div>
         <nav class="nav">
           <a class="nav__link active" href="#">首页</a>
@@ -31,9 +31,9 @@
   .container{width:100%;max-width:1200px;padding:0 16px;margin:0 auto}
   .topbar__inner{display:flex;align-items:center;height:64px;gap:16px}
   .brand{display:flex;align-items:center;gap:8px}
-  .brand__name{font-weight:700;font-size:25px}
-  .nav{display:flex;gap:28px;margin-left:60px;flex:1}
-  .nav__link{color:#dfe8ff;text-decoration:none;padding:8px 10px;border-radius:8px;transition:background-color .2s,color .2s;font-size:20px}
+  .brand__logo{height:40px;max-width:180px;object-fit:contain}
+  .nav{display:flex;gap:26px;margin-left:50px;flex:1}
+  .nav__link{color:#dfe8ff;text-decoration:none;padding:8px 10px;border-radius:8px;transition:background-color .2s,color .2s;font-size:18px}
   .nav__link:hover{background:rgba(255,255,255,.12);color:#fff}
   .nav__link.active{background:#fff;color:#0d47a1;font-weight:700}
   .actions{display:flex;align-items:center;gap:20px}
