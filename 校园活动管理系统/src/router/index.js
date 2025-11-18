@@ -7,11 +7,15 @@ const MyActivities = () => import('../views/MyActivities.vue')
 const PersonalInfo = () => import('../views/PersonalInfo.vue')
 const MyComments = () => import('../views/MyComments.vue')
 const Statistics = () => import('../views/Statistics.vue')
+const OrganizerManage = () => import('../views/OrganizerManage.vue')
+const AdminDashboard = () => import('../views/AdminDashboard.vue')
 
 const routes = [
   { path: '/', name: 'Home', component: Home },
   { path: '/home', name: 'HomePage', component: Home },
   { path: '/login', name: 'Login', component: Login },
+  { path: '/organizer/manage', name: 'OrganizerManage', component: OrganizerManage },
+  { path: '/admin/dashboard', name: 'AdminDashboard', component: AdminDashboard },
   { 
     path: '/personal', 
     component: PersonalCenter,
@@ -33,11 +37,18 @@ const router = createRouter({
 // 路由守卫：检查登录状态
 router.beforeEach((to, from, next) => {
   const isLoggedIn = localStorage.getItem('isLoggedIn')
+  const userRole = localStorage.getItem('userRole')
   
   // 如果访问个人中心相关页面但未登录，跳转到登录页
   if (to.path.startsWith('/personal') && !isLoggedIn) {
     next('/login')
   } 
+  else if (to.path.startsWith('/organizer') && userRole !== 'organizer') {
+    next('/login')
+  }
+  else if (to.path.startsWith('/admin') && userRole !== 'admin') {
+    next('/login')
+  }
   // 首页和登录页不需要登录即可访问
   else {
     next()

@@ -40,15 +40,35 @@ const form = ref({
   password: ''
 })
 
-const handleLogin = () => {
-  // 简单的登录逻辑，实际项目中应该调用API
-  if (form.value.username && form.value.password) {
-    // 保存登录状态到localStorage
-    localStorage.setItem('isLoggedIn', 'true')
-    localStorage.setItem('username', form.value.username)
-    // 跳转到首页
-    router.push('/')
+const mockUsers = {
+  organizer: {
+    password: '123456',
+    role: 'organizer'
+  },
+  admin: {
+    password: '123456',
+    role: 'admin'
   }
+}
+
+const handleLogin = () => {
+  const { username, password } = form.value
+  const matchedUser = mockUsers[username]
+
+  if (!matchedUser) {
+    window.alert('账号不存在，请检查用户名')
+    return
+  }
+
+  if (matchedUser.password !== password) {
+    window.alert('密码错误，请重新输入')
+    return
+  }
+
+  localStorage.setItem('isLoggedIn', 'true')
+  localStorage.setItem('username', username)
+  localStorage.setItem('userRole', matchedUser.role)
+  router.push('/')
 }
 </script>
 
