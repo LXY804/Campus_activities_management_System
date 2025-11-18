@@ -2,7 +2,7 @@
     <header class="topbar">
       <div class="container topbar__inner">
         <div class="brand">
-          <span class="brand__name">武汉理工大学</span>
+          <img class="brand__logo" src="@/assets/header-logo.png" alt="武汉理工大学">
         </div>
         <nav class="nav">
           <router-link class="nav__link" :class="{ active: $route.path === '/' || $route.path === '/home' }" to="/">首页</router-link>
@@ -26,27 +26,53 @@
           <button class="icon-btn" title="系统公告">🔔系统公告</button>
           <!-- 已登录时显示退出按钮 -->
           <button v-if="isLoggedIn" class="btn logout" title="退出登录" @click="handleLogout">退出</button>
+          <router-link
+            v-if="isOrganizer"
+            to="/organizer/manage"
+            class="btn ghost"
+            title="活动管理"
+          >活动管理</router-link>
+          <router-link
+            v-if="isAdmin"
+            to="/admin/dashboard"
+            class="btn ghost"
+            title="管理后台"
+          >管理后台</router-link>
         </div>
       </div>
     </header>
   </template>
   
   <script setup>
-  import { ref, onMounted, onUnmounted, watch } from 'vue'
+  import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
   import { useRouter, useRoute } from 'vue-router'
   
   const router = useRouter()
   const route = useRoute()
   const isLoggedIn = ref(false)
+  const userRole = ref('')
+  const isOrganizer = computed(() => isLoggedIn.value && userRole.value === 'organizer')
+  const isAdmin = computed(() => isLoggedIn.value && userRole.value === 'admin')
+  
+  const syncRole = () => {
+    userRole.value = localStorage.getItem('userRole') || ''
+  }
   
   const checkLoginStatus = () => {
     isLoggedIn.value = !!localStorage.getItem('isLoggedIn')
+    if (isLoggedIn.value) {
+      syncRole()
+    } else {
+      userRole.value = ''
+    }
   }
   
   const handleLogout = () => {
     localStorage.removeItem('isLoggedIn')
     localStorage.removeItem('username')
+    localStorage.removeItem('userRole')
     isLoggedIn.value = false
+    userRole.value = ''
     router.push('/')
   }
   
@@ -85,12 +111,18 @@
     display:flex;
     align-items:center;
     height:64px;
-    gap:16px
+    gap:16px;
+    transform:translateX(-120px)
   }
   .brand{
     display:flex;
     align-items:center;
     gap:8px
+  }
+  .brand__logo{
+    height:40px;
+    max-width:180px;
+    object-fit:contain
   }
   .brand__name{
     font-weight:700;
