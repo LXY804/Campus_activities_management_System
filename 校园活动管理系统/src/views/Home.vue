@@ -28,7 +28,7 @@
 .stats{ background:#1565c0; color:#fff; padding:16px 0; border-top:4px solid rgba(255,255,255,.2) }
   .container{width:100%;max-width:1200px;padding:0 16px;margin:0 auto}
   .hero{
-     background:linear-gradient(180deg,#9f9fa5 0%,#afb0b1 100%);
+     background:linear-gradient(180deg,rgba(159,159,165,.0) 0%,rgba(175,176,177,.8) 100%), url(../assets/R-C.jpeg) center/cover no-repeat;
      color:#fff;
     display:flex;
     align-items:center;
