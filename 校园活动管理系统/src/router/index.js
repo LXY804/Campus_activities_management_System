@@ -4,6 +4,7 @@ const Home = () => import('../views/Home.vue')
 const EventPromotion = () => import('../views/EventPromotion.vue')
 const EventList = () => import('../views/EventList.vue')
 const EventInfo = () => import('../views/EventInfo.vue')
+const NewsList = () => import('../views/NewsList.vue')
 const Login = () => import('../views/Login.vue')
 const PersonalCenter = () => import('../views/PersonalCenter.vue')
 const MyActivities = () => import('../views/MyActivities.vue')
@@ -19,6 +20,7 @@ const routes = [
   { path: '/promotion', name: 'EventPromotion', component: EventPromotion },
   { path: '/events', name: 'EventList', component: EventList },
   { path: '/event/:id', name: 'EventInfo', component: EventInfo },
+  { path: '/news', name: 'NewsList', component: NewsList },
   { path: '/event', redirect: '/events' },
   { path: '/login', name: 'Login', component: Login },
   { path: '/organizer/manage', name: 'OrganizerManage', component: OrganizerManage },
