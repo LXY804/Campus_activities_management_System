@@ -6,10 +6,10 @@
         </div>
         <nav class="nav">
           <router-link class="nav__link" :class="{ active: $route.path === '/' || $route.path === '/home' }" to="/">首页</router-link>
-          <a class="nav__link" href="#">活动宣传</a>
+          <router-link class="nav__link" :class="{ active: $route.path === '/promotion' }" to="/promotion">活动宣传</router-link>
           <a class="nav__link" href="#">论坛交流</a>
           <a class="nav__link" href="#">积分礼品</a>
-          <a class="nav__link" href="#">活动信息</a>
+          <router-link class="nav__link" :class="{ active: $route.path.startsWith('/event') }" to="/events">活动信息</router-link>
           <a class="nav__link" href="#">校园资讯</a>
         </nav>
         <div class="actions">
