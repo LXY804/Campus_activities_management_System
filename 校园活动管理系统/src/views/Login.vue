@@ -79,6 +79,11 @@ import AuthForm from '@/components/AuthForm.vue'
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
   margin-right: 60px;
   flex-shrink: 0;
+  /* 绝对定位到右侧中心，避免影响左侧 hero 文本的布局 */
+  position: absolute;
+  right: 60px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .stats {
@@ -136,6 +141,9 @@ import AuthForm from '@/components/AuthForm.vue'
   }
 
   .form-wrapper {
+    /* 小屏幕下恢复为文档流（不使用绝对定位）以便垂直排列 */
+    position: static;
+    transform: none;
     width: calc(100% - 40px);
     margin: 20px;
     padding: 40px 20px;
