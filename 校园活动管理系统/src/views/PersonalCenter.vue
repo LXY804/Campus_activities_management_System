@@ -1,11 +1,15 @@
 <template>
-  <div class="personal-center">
-    <!-- 顶部导航栏 -->
-    <NavBar />
+  <div class="personal-center page" :style="bgStyle">
+    <div class="bg-overlay"></div>
+    <div class="content">
+      <!-- 顶部导航栏 -->
+      <div class="nav-bar-wrapper">
+        <NavBar />
+      </div>
 
-    <div class="main-layout">
-      <!-- 左侧边栏 -->
-      <aside class="sidebar">
+      <div class="main-layout">
+        <!-- 左侧边栏 -->
+        <aside class="sidebar">
         <div class="user-info">
           <div class="user-avatar">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -66,12 +70,13 @@
             <span>数据统计</span>
           </router-link>
         </nav>
-      </aside>
+        </aside>
 
-      <!-- 主内容区 -->
-      <main class="main-content">
-        <router-view />
-      </main>
+        <!-- 主内容区 -->
+        <main class="main-content">
+          <router-view />
+        </main>
+      </div>
     </div>
   </div>
 </template>
@@ -80,7 +85,16 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
+import libraryImg from '@/assets/图书馆.webp'
 
+const bgStyle = {
+  backgroundImage: `url(${libraryImg})`,
+  backgroundSize: 'cover',
+  backgroundPosition: 'center top',
+  backgroundRepeat: 'no-repeat',
+  backgroundAttachment: 'fixed',
+  minHeight: '100vh'
+}
 const router = useRouter()
 const username = ref('用户名')
 
@@ -103,12 +117,41 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.personal-center {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: #f7f9fc;
-  overflow: hidden;
+
+
+.personal-center.page {
+  position: relative;
+  min-height: 100vh;
+  overflow: auto;
+}
+
+.personal-center .content{
+  position: relative;
+  z-index: 2;
+  display:flex;
+  flex-direction:column;
+  min-height:100vh;
+  padding-top:82px;
+}
+
+.nav-bar-wrapper{
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  z-index:20;
+  background:rgba(255,255,255,0.95);
+  backdrop-filter:blur(6px);
+  box-shadow:0 2px 10px rgba(0,0,0,0.08);
+}
+
+.bg-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(2px);
+  z-index: 0;
+  pointer-events: none;
 }
 
 .main-layout {
@@ -116,28 +159,33 @@ onMounted(() => {
   flex: 1;
   max-width: 1200px;
   width: 100%;
-  margin: 0 auto;
-  padding: 20px 16px;
+  margin: 16px auto 0;
+  padding: 20px 16px 40px;
   gap: 20px;
-  overflow: hidden;
+  align-items: stretch;
 }
 
 .sidebar {
-  width: 240px;
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  height: fit-content;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  width: 250px;
+  background: rgba(255,255,255,0.78);
+  border-radius: 28px;
+  padding: 36px 26px;
+  align-self: stretch;
+  box-shadow: 0 25px 45px rgba(15,35,95,0.18);
+  backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.3);
+  display:flex;
+  flex-direction:column;
+  margin-top:-20px;
 }
 
 .user-info {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20px 0;
-  border-bottom: 1px solid #eee;
-  margin-bottom: 20px;
+  padding: 24px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.5);
+  margin-bottom: 24px;
 }
 
 .user-avatar {
@@ -166,29 +214,31 @@ onMounted(() => {
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .sidebar-nav__item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
-  border-radius: 8px;
+  padding: 20px 16px;
+  border-radius: 14px;
   text-decoration: none;
-  color: #666;
+  color: #1c2a3c;
   transition: all 0.2s;
   font-size: 15px;
+  font-weight:600;
 }
 
 .sidebar-nav__item:hover {
-  background: #f5f5f5;
-  color: #333;
+  background: rgba(255,255,255,0.6);
+  color: #1c2a3c;
 }
 
 .sidebar-nav__item.active {
-  background: #1565c0;
+  background: linear-gradient(135deg,#195dc5,#114693);
   color: #fff;
+  box-shadow:0 10px 18px rgba(25,93,197,.3);
 }
 
 .sidebar-nav__icon {
@@ -198,10 +248,12 @@ onMounted(() => {
 
 .main-content {
   flex: 1;
-  background: white;
-  border-radius: 8px;
-  padding: 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: rgba(255,255,255,0.8);
+  border-radius: 24px;
+  padding: 32px;
+  box-shadow: 0 25px 50px rgba(15,35,95,0.15);
+  backdrop-filter: blur(10px);
+  border:1px solid rgba(255,255,255,0.35);
   overflow: hidden;
   display: flex;
   flex-direction: column;

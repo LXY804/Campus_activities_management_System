@@ -88,6 +88,17 @@ const comments = ref([
   display: flex;
   flex-direction: column;
   gap: 16px;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.comment-list::-webkit-scrollbar{
+  width:6px;
+}
+.comment-list::-webkit-scrollbar-thumb{
+  background:rgba(21,101,192,0.4);
+  border-radius:999px;
 }
 
 .comment-card {
