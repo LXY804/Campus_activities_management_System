@@ -175,24 +175,40 @@
         <article class="panel" v-if="activeMenu === 'config'">
           <header>
             <h2>系统配置</h2>
-            <button>保存设置</button>
+            <button @click="saveConfig" class="btn-save">💾 保存设置</button>
           </header>
           <div class="config-panel">
             <div class="config-item">
               <label>最大活动人数限制</label>
-              <input type="number" value="500" />
+              <input 
+                v-model.number="configForm.maxActivityPeople" 
+                type="number" 
+                min="10"
+                max="10000"
+              />
             </div>
             <div class="config-item">
               <label>审核活动超时时间（小时）</label>
-              <input type="number" value="48" />
+              <input 
+                v-model.number="configForm.reviewTimeout" 
+                type="number"
+                min="1"
+                max="168"
+              />
             </div>
             <div class="config-item">
               <label>启用邮件通知</label>
-              <input type="checkbox" checked />
+              <input 
+                v-model="configForm.emailNotification" 
+                type="checkbox" 
+              />
             </div>
             <div class="config-item">
               <label>维护模式</label>
-              <input type="checkbox" />
+              <input 
+                v-model="configForm.maintenanceMode" 
+                type="checkbox" 
+              />
             </div>
           </div>
         </article>
@@ -201,27 +217,41 @@
         <article class="panel" v-if="activeMenu === 'stats'">
           <header>
             <h2>数据统计</h2>
-            <button>导出报告</button>
+            <button class="btn-export">📊 导出报告</button>
           </header>
+
+          <!-- 时间范围选择 -->
+          <div class="stats-date-picker">
+            <label>选择月份：</label>
+            <input 
+              v-model="selectedMonth" 
+              type="month"
+              @change="updateStatsData"
+              class="month-input"
+            />
+            <button @click="showAllData" class="btn-show-all">显示全部数据</button>
+          </div>
+
+          <!-- 统计数据卡片 -->
           <div class="stats-panel">
             <div class="stat-card">
               <h4>本月活动统计</h4>
               <div class="stat-numbers">
-                <div class="number">{{ monthStats.activities }}</div>
+                <div class="number">{{ currentStats.activities }}</div>
                 <p>新增活动</p>
               </div>
             </div>
             <div class="stat-card">
               <h4>用户参与度</h4>
               <div class="stat-numbers">
-                <div class="number">{{ monthStats.participation }}%</div>
+                <div class="number">{{ currentStats.participation }}%</div>
                 <p>参与率</p>
               </div>
             </div>
             <div class="stat-card">
               <h4>平均评分</h4>
               <div class="stat-numbers">
-                <div class="number">{{ monthStats.rating }}</div>
+                <div class="number">{{ currentStats.rating }}</div>
                 <p>★</p>
               </div>
             </div>
@@ -297,10 +327,102 @@ const filteredUsers = computed(() => {
   })
 })
 
-const monthStats = {
-  activities: 42,
-  participation: 78,
-  rating: 4.6
+// 系统配置表单
+const configForm = ref({
+  maxActivityPeople: 500,
+  reviewTimeout: 48,
+  emailNotification: true,
+  maintenanceMode: false
+})
+
+// 保存系统配置
+const saveConfig = () => {
+  // 验证表单
+  if (configForm.value.maxActivityPeople < 10 || configForm.value.maxActivityPeople > 10000) {
+    showNotification('最大活动人数必须在 10-10000 之间', 'warning')
+    return
+  }
+  if (configForm.value.reviewTimeout < 1 || configForm.value.reviewTimeout > 168) {
+    showNotification('审核超时时间必须在 1-168 小时之间', 'warning')
+    return
+  }
+  
+  // 保存到 localStorage
+  localStorage.setItem('adminConfig', JSON.stringify(configForm.value))
+  showNotification('✓ 系统配置已保存', 'success')
+}
+
+// 初始化配置（从 localStorage 加载）
+const initConfig = () => {
+  const saved = localStorage.getItem('adminConfig')
+  if (saved) {
+    try {
+      configForm.value = JSON.parse(saved)
+    } catch (e) {
+      console.error('配置加载失败', e)
+    }
+  }
+}
+
+// 组件初始化时加载配置
+initConfig()
+
+// 数据统计相关
+// 获取当前年月（格式：YYYY-MM）
+const getCurrentMonth = () => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  return `${year}-${month}`
+}
+
+// 选中的月份
+const selectedMonth = ref(getCurrentMonth())
+
+// Mock 数据：不同月份的统计数据
+const statsDataByMonth = {
+  '2024-09': { activities: 28, participation: 72, rating: 4.3 },
+  '2024-10': { activities: 35, participation: 75, rating: 4.5 },
+  '2024-11': { activities: 42, participation: 78, rating: 4.6 },
+  '2024-12': { activities: 50, participation: 82, rating: 4.8 },
+  '2025-01': { activities: 38, participation: 76, rating: 4.4 },
+  '2025-02': { activities: 45, participation: 80, rating: 4.7 },
+}
+
+// 获取默认数据（当前月份如果没有数据）
+const getDefaultStats = () => ({
+  activities: Math.floor(Math.random() * 40) + 30,
+  participation: Math.floor(Math.random() * 20) + 70,
+  rating: (Math.random() * 0.8 + 4.0).toFixed(1)
+})
+
+// 当前统计数据
+const currentStats = ref(statsDataByMonth[selectedMonth.value] || getDefaultStats())
+
+// 更新统计数据
+const updateStatsData = () => {
+  const stats = statsDataByMonth[selectedMonth.value]
+  if (stats) {
+    currentStats.value = stats
+  } else {
+    currentStats.value = getDefaultStats()
+  }
+  showNotification(`已切换到 ${selectedMonth.value} 的数据`, 'info')
+}
+
+// 显示全部数据（统计所有月份的数据）
+const showAllData = () => {
+  const allActivities = Object.values(statsDataByMonth).reduce((sum, stats) => sum + stats.activities, 0)
+  const avgParticipation = Math.round(Object.values(statsDataByMonth).reduce((sum, stats) => sum + stats.participation, 0) / Object.keys(statsDataByMonth).length)
+  const avgRating = (Object.values(statsDataByMonth).reduce((sum, stats) => sum + parseFloat(stats.rating), 0) / Object.keys(statsDataByMonth).length).toFixed(1)
+  
+  currentStats.value = {
+    activities: allActivities,
+    participation: avgParticipation,
+    rating: avgRating
+  }
+  selectedMonth.value = ''
+  showNotification('已显示全部数据统计', 'success')
 }
 
 const userSummary = {
@@ -760,37 +882,164 @@ const userSummary = {
 .config-panel {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
 }
 
 .config-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px;
-  background: #f8f8fc;
+  padding: 14px 16px;
+  background: #f9f9fd;
   border-radius: 10px;
+  border: 1px solid #f0f0f5;
+  transition: all 0.2s;
+}
+
+.config-item:hover {
+  background: #fff;
+  border-color: #e5e5e5;
 }
 
 .config-item label {
   color: #2c2c2c;
   font-weight: 500;
   font-size: 14px;
+  min-width: 160px;
 }
 
-.config-item input {
-  padding: 8px 12px;
-  border: 1px solid #ddd;
+.config-item input[type="number"] {
+  padding: 9px 12px;
+  border: 1px solid #e5e5e5;
   border-radius: 8px;
   font-size: 14px;
-  min-width: 120px;
+  min-width: 140px;
+  outline: none;
+  transition: all 0.2s;
+  background: linear-gradient(135deg, #ffffff 0%, #f9f9fd 100%);
+}
+
+.config-item input[type="number"]:focus {
+  border-color: #6a5cf8;
+  box-shadow: 0 0 0 3px rgba(106, 92, 248, 0.08);
 }
 
 .config-item input[type="checkbox"] {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   cursor: pointer;
   accent-color: #6a5cf8;
+}
+
+/* 保存按钮 */
+.btn-save {
+  background: linear-gradient(135deg, #6a5cf8 0%, #7c5cf8 100%);
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(106, 92, 248, 0.3);
+}
+
+.btn-save:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(106, 92, 248, 0.4);
+}
+
+.btn-save:active {
+  transform: translateY(0);
+}
+
+/* 月份选择器样式 */
+.stats-date-picker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  background: #f9f9fd;
+  border-radius: 10px;
+  border: 1px solid #f0f0f5;
+}
+
+.stats-date-picker label {
+  color: #2c2c2c;
+  font-weight: 500;
+  font-size: 14px;
+  min-width: 80px;
+}
+
+.month-input {
+  padding: 9px 12px;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s;
+  background: linear-gradient(135deg, #ffffff 0%, #f9f9fd 100%);
+  color: #2c2c2c;
+  cursor: pointer;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+.month-input:hover {
+  border-color: #d0d0d0;
+  background-color: #fafafc;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.month-input:focus {
+  border-color: #6a5cf8;
+  box-shadow: 0 0 0 3px rgba(106, 92, 248, 0.08);
+  background: #fff;
+}
+
+/* 导出按钮 */
+.btn-export {
+  background: linear-gradient(135deg, #6a5cf8 0%, #7c5cf8 100%);
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(106, 92, 248, 0.3);
+}
+
+.btn-export:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(106, 92, 248, 0.4);
+}
+
+.btn-export:active {
+  transform: translateY(0);
+}
+
+/* 显示全部数据按钮 */
+.btn-show-all {
+  background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%);
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(13, 71, 161, 0.3);
+  margin-left: 12px;
+}
+
+.btn-show-all:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(13, 71, 161, 0.4);
+}
+
+.btn-show-all:active {
+  transform: translateY(0);
 }
 
 /* 数据统计面板样式 */
