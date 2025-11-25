@@ -58,8 +58,8 @@
     userRole.value = localStorage.getItem('userRole') || ''
   }
   
-  const checkLoginStatus = () => {
-    isLoggedIn.value = !!localStorage.getItem('isLoggedIn')
+const checkLoginStatus = () => {
+  isLoggedIn.value = !!localStorage.getItem('token')
     if (isLoggedIn.value) {
       syncRole()
     } else {
@@ -67,14 +67,15 @@
     }
   }
   
-  const handleLogout = () => {
-    localStorage.removeItem('isLoggedIn')
-    localStorage.removeItem('username')
-    localStorage.removeItem('userRole')
-    isLoggedIn.value = false
-    userRole.value = ''
-    router.push('/')
-  }
+const handleLogout = () => {
+  localStorage.removeItem('token')
+  localStorage.removeItem('isLoggedIn')
+  localStorage.removeItem('username')
+  localStorage.removeItem('userRole')
+  isLoggedIn.value = false
+  userRole.value = ''
+  router.push('/login')
+}
   
   onMounted(() => {
     checkLoginStatus()

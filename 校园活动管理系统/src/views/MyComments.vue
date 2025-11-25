@@ -2,7 +2,15 @@
   <div class="my-comments">
     <h2 class="page-title">我的评论</h2>
 
-    <div v-if="comments.length" class="comment-list">
+    <div v-if="loading" class="empty-state">
+      正在加载评论...
+    </div>
+
+    <div v-else-if="errorMsg" class="empty-state">
+      {{ errorMsg }}
+    </div>
+
+    <div v-else-if="comments.length" class="comment-list">
       <div v-for="comment in comments" :key="comment.id" class="comment-card">
         <div class="comment-header">
           <div>
@@ -29,40 +37,51 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { fetchMyComments } from '@/api/comment'
+import { useRouter } from 'vue-router'
 
-const comments = ref([
-  {
-    id: 1,
-    activityName: 'AI 技术交流沙龙',
-    time: '12月18日 14:00-16:00',
-    location: '图书馆报告厅',
-    score: 5,
-    content: '讲座内容非常充实，分享的案例很实用，收获很多。',
-    date: '2025-12-20 10:15',
-    status: '已通过'
-  },
-  {
-    id: 2,
-    activityName: '校园公益志愿活动',
-    time: '12月10日 09:00-12:00',
-    location: '南门广场',
-    score: 4,
-    content: '组织得井井有条，希望下次时间可以再灵活一些。',
-    date: '2025-12-12 19:30',
-    status: '已通过'
-  },
-  {
-    id: 3,
-    activityName: '创新创业大赛经验分享',
-    time: '11月29日 18:30-20:00',
-    location: '教学楼301',
-    score: 5,
-    content: '嘉宾经验丰富，解答问题很耐心，受益匪浅。',
-    date: '2025-11-30 08:45',
-    status: '审核中'
+const router = useRouter()
+const comments = ref([])
+const loading = ref(false)
+const errorMsg = ref('')
+
+const requireLogin = () => {
+  if (!localStorage.getItem('token')) {
+    if (confirm('此操作需要登录，是否前往登录？')) {
+      router.push('/login')
+    }
+    return false
   }
-])
+  return true
+}
+
+const loadComments = async () => {
+  if (!requireLogin()) return
+  loading.value = true
+  errorMsg.value = ''
+  try {
+    const data = await fetchMyComments()
+    comments.value =
+      data?.list?.map((item) => ({
+        id: item.id,
+        activityName: item.event_title,
+        time: item.start_time ? new Date(item.start_time).toLocaleString() : '',
+        location: item.location || '',
+        score: item.rating,
+        content: item.content,
+        date: item.created_at ? new Date(item.created_at).toLocaleString() : '',
+        status: item.status === 1 ? '已通过' : item.status === 0 ? '审核中' : '已隐藏'
+      })) || []
+  } catch (err) {
+    console.error(err)
+    errorMsg.value = err?.message || '加载评论失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadComments)
 </script>
 
 <style scoped>

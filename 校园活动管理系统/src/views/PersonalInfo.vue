@@ -78,7 +78,9 @@
       </div>
 
       <div class="form-actions">
-        <button class="btn-submit" type="button">确认修改</button>
+        <button class="btn-submit" type="button" @click="handleSubmit" :disabled="loading">
+          {{ loading ? '保存中...' : '确认修改' }}
+        </button>
       </div>
 
       <div class="form-notice">
@@ -90,9 +92,13 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { fetchProfile, updateProfile } from '@/api/user'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 const form = ref({
-  studentId: '18633178998',
+  studentId: '',
   name: '',
   role: '',
   gender: '',
@@ -104,12 +110,62 @@ const form = ref({
   class: ''
 })
 
-onMounted(() => {
-  const savedUsername = localStorage.getItem('username')
-  if (savedUsername) {
-    form.value.name = savedUsername
+const loading = ref(false)
+
+const requireLogin = () => {
+  if (!localStorage.getItem('token')) {
+    if (confirm('需要登录后才能查看个人信息，是否前往登录？')) {
+      router.push('/login')
+    }
+    return false
   }
-})
+  return true
+}
+
+const loadProfile = async () => {
+  if (!requireLogin()) return
+  try {
+    const data = await fetchProfile()
+    form.value = {
+      studentId: data?.student_id || '',
+      name: data?.real_name || data?.username || '',
+      role: data?.role || '',
+      gender: data?.gender || '',
+      idType: '身份证',
+      idNumber: '',
+      phone: data?.phone || '',
+      email: data?.email || '',
+      college: data?.department || '',
+      class: data?.grade || ''
+    }
+  } catch (err) {
+    alert(err?.message || '加载个人信息失败')
+  }
+}
+
+const handleSubmit = async () => {
+  if (!requireLogin() || loading.value) return
+  loading.value = true
+  try {
+    await updateProfile({
+      studentId: form.value.studentId,
+      realName: form.value.name,
+      role: form.value.role,
+      gender: form.value.gender,
+      phone: form.value.phone,
+      email: form.value.email,
+      college: form.value.college,
+      className: form.value.class
+    })
+    alert('信息已更新')
+  } catch (err) {
+    alert(err?.message || '更新失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadProfile)
 </script>
 
 <style scoped>

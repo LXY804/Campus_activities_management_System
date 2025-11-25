@@ -78,7 +78,9 @@
         </div>
       </div>
 
-      <button type="submit" class="submit-btn">登录</button>
+      <button type="submit" class="submit-btn" :disabled="loading">
+        {{ loading ? '处理中...' : '登录' }}
+      </button>
     </form>
 
     <!-- 注册表单 -->
@@ -169,7 +171,9 @@
         </div>
       </div>
 
-      <button type="submit" class="submit-btn">注册</button>
+      <button type="submit" class="submit-btn" :disabled="loading">
+        {{ loading ? '处理中...' : '注册' }}
+      </button>
     </form>
   </div>
 </template>
@@ -177,9 +181,11 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { login, register } from '@/api/auth'
 
 const router = useRouter()
 const isLogin = ref(true)
+const loading = ref(false)
 
 const loginForm = ref({
   username: '',
@@ -195,51 +201,39 @@ const registerForm = ref({
   role: 'student'
 })
 
-const mockUsers = {
-  organizer: {
-    password: '123456',
-    role: 'organizer'
-  },
-  admin: {
-    password: '123456',
-    role: 'admin'
-  }
+const persistSession = (payload, fallbackRole = 'student', fallbackUsername = '') => {
+  if (!payload) return
+  localStorage.setItem('token', payload.token || '')
+  localStorage.setItem('isLoggedIn', 'true')
+  localStorage.setItem('username', payload.username || fallbackUsername)
+  localStorage.setItem('userRole', payload.role || fallbackRole)
+  localStorage.setItem('userId', payload.userId || '')
 }
 
-const handleLogin = () => {
+const handleLogin = async () => {
   const { username, password, role } = loginForm.value
-  
+
   if (!username || !password) {
     alert('请填写用户名和密码')
     return
   }
 
-  const matchedUser = mockUsers[username]
-
-  if (!matchedUser) {
-    alert('账号不存在，请检查用户名')
-    return
+  loading.value = true
+  try {
+    const data = await login({ username, password, role })
+    persistSession(data, role, username)
+    alert('登录成功')
+    router.push('/')
+  } catch (err) {
+    alert(err?.message || '登录失败，请稍后再试')
+  } finally {
+    loading.value = false
   }
-
-  if (matchedUser.password !== password) {
-    alert('密码错误，请重新输入')
-    return
-  }
-
-  if (matchedUser.role !== role) {
-    alert('身份验证失败，请选择正确的身份')
-    return
-  }
-
-  localStorage.setItem('isLoggedIn', 'true')
-  localStorage.setItem('username', username)
-  localStorage.setItem('userRole', role)
-  router.push('/')
 }
 
-const handleRegister = () => {
+const handleRegister = async () => {
   const { username, phone, password, confirmPassword, role } = registerForm.value
-  
+
   if (!username || !phone || !password || !confirmPassword) {
     alert('请填写所有字段')
     return
@@ -255,14 +249,18 @@ const handleRegister = () => {
     return
   }
 
-  // 注册成功，保存到localStorage（实际应该调用后端API）
-  localStorage.setItem('isLoggedIn', 'true')
-  localStorage.setItem('username', username)
-  localStorage.setItem('userRole', role)
-  localStorage.setItem('userPhone', phone)
-  
-  alert('注册成功，已自动登录')
-  router.push('/')
+  loading.value = true
+  try {
+    const data = await register({ username, phone, password, role })
+    persistSession(data, 'student', username)
+    localStorage.setItem('userPhone', phone)
+    alert('注册成功，已自动登录')
+    router.push('/')
+  } catch (err) {
+    alert(err?.message || '注册失败，请稍后再试')
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 

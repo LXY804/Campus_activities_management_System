@@ -21,7 +21,7 @@
           </div>
         </div>
 
-        <div class="cards">
+        <div class="cards" v-if="!loading && !errorMsg && filteredEvents.length">
           <div v-for="ev in filteredEvents" :key="ev.id" class="card">
 
             <div class="card-bg" :style="cardBgStyle"></div>
@@ -52,6 +52,9 @@
             </div>
           </div>
         </div>
+        <div v-else-if="loading" class="loading">加载中...</div>
+        <div v-else-if="errorMsg" class="error">{{ errorMsg }}</div>
+        <div v-else class="loading">暂无活动数据</div>
       </div>
     </div>
   </div>
@@ -59,11 +62,12 @@
 
 <script setup>
 import NavBar from '@/components/NavBar.vue'
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import gradImg from '@/assets/graduation.png'
-// 背景图片（请确保该文件存在于 src/assets）
 import libraryImg from '@/assets/图书馆.webp'
+import { fetchEvents } from '@/api/event'
+
 
 const bgStyle = {
   backgroundImage: `url(${libraryImg})`,
@@ -82,93 +86,73 @@ const tabs = ['全部', '进行中', '未开始', '待评价', '已结束']
 // 当前选中的标签页索引
 const activeTab = ref(0)
 
-// mock 数据，后续可替换为接口请求
-const events = ref([
-  {
-    id: 1,
-    code: '7717789',
-    title: '社团迎新志愿服务活动',
-    image: gradImg,
-    signed_up: 7,
-    college: '计算机学院',
-    keywords: '志愿,迎新',
-    location: '主楼广场',
-    time: '05月12日 09:00-12:00',
-    status: 'open',
-    statusText: '进行中',
-    cta: '点击报名'
-  },
-  {
-    id: 2,
-    code: '7717790',
-    title: '校园文化节讲座',
-    image: gradImg,
-    signed_up: 7,
-    college: '人文学院',
-    keywords: '讲座,文化节',
-    location: '报告厅A',
-    time: '06月01日 14:00-16:00',
-    status: 'ended',
-    statusText: '已结束',
-    cta: '点击评价'
-  },
-  {
-    id: 3,
-    code: '7717791',
-    title: '图书馆读书交流会',
-    image: gradImg,
-    signed_up: 12,
-    college: '图书馆',
-    keywords: '读书,交流',
-    location: '图书馆多功能厅',
-    time: '06月20日 18:00-20:00',
-    status: 'upcoming',
-    statusText: '未开始',
-    cta: '查看详情'
-  },
-  {
-    id: 4,
-    code: '7717792',
-    title: '校园环保志愿活动',
-    image: gradImg,
-    signed_up: 25,
-    college: '环境学院',
-    keywords: '环保,志愿',
-    location: '东侧绿地',
-    time: '05月20日 08:30-11:30',
-    status: 'open',
-    statusText: '进行中',
-    cta: '点击报名'
-  },
-  {
-    id: 5,
-    code: '7717793',
-    title: '学生创业大赛路演',
-    image: gradImg,
-    signed_up: 40,
-    college: '经管学院',
-    keywords: '创业,比赛',
-    location: '创客中心',
-    time: '04月30日 13:00-17:00',
-    status: 'to_review',
-    statusText: '待评价',
-    cta: '去评价'
-  },
-  {
-    id: 6,
-    code: '7717794',
-    title: '运动会志愿者招募',
-    image: gradImg,
-    signed_up: 58,
-    college: '体育学院',
-    keywords: '运动,志愿',
-    location: '体育场',
-    time: '07月10日 07:30-12:00',
-    status: 'upcoming',
-    statusText: '未开始',
-    cta: '查看详情'
+const events = ref([])
+const loading = ref(false)
+const errorMsg = ref('')
+
+const statusLabelMap = {
+  open: '进行中',
+  ongoing: '进行中',
+  upcoming: '未开始',
+  to_review: '待评价',
+  finished: '已结束',
+  ended: '已结束',
+  cancelled: '已取消'
+}
+
+const ctaMap = {
+  open: '点击报名',
+  ongoing: '点击报名',
+  upcoming: '查看详情',
+  finished: '去评价',
+  to_review: '去评价',
+  ended: '已结束'
+}
+
+const formatTimeRange = (start, end) => {
+  if (!start) return ''
+  const startDate = new Date(start)
+  const endDate = end ? new Date(end) : null
+  const pad = (v) => String(v).padStart(2, '0')
+  const startStr = `${pad(startDate.getMonth() + 1)}月${pad(startDate.getDate())}日 ${pad(
+    startDate.getHours()
+  )}:${pad(startDate.getMinutes())}`
+  if (!endDate) return startStr
+  const endStr = `${pad(endDate.getMonth() + 1)}月${pad(endDate.getDate())}日 ${pad(
+    endDate.getHours()
+  )}:${pad(endDate.getMinutes())}`
+  return `${startStr} - ${endStr}`
+}
+
+const loadEvents = async () => {
+  loading.value = true
+  errorMsg.value = ''
+  try {
+    const data = await fetchEvents()
+    events.value =
+      data?.list?.map((item) => ({
+        id: item.id,
+        code: item.code,
+        title: item.title,
+        image: item.cover_url || gradImg,
+        signed_up: item.signed_up || 0,
+        college: item.organizer_name || '校园活动中心',
+        keywords: item.excerpt || '',
+        location: item.location,
+        time: formatTimeRange(item.start_time, item.end_time),
+        status: item.status,
+        statusText: statusLabelMap[item.status] || '进行中',
+        cta: ctaMap[item.status] || '查看详情'
+      })) || []
+  } catch (err) {
+    console.error(err)
+    errorMsg.value = err?.message || '加载活动失败'
+  } finally {
+    loading.value = false
   }
-])
+}
+
+onMounted(loadEvents)
 
 function open(id) {
   router.push({ name: 'EventInfo', params: { id } }).catch(() => {})
@@ -182,8 +166,6 @@ function cta(ev) {
 function setTab(idx) {
   activeTab.value = idx
 }
-
-import { computed } from 'vue'
 
 const statusMap = {
   '进行中': 'open',
@@ -216,7 +198,8 @@ const cardBgStyle = {
 .tabs{display:flex;gap:28px;padding:10px 12px;background:rgba(255,255,255,0.9);border-radius:6px;margin-bottom:12px}
 .tab{padding:8px 10px;cursor:pointer;color:#233;border-bottom:3px solid transparent;font-weight:600}
 .tab.active{color:#0b4ea2;border-bottom-color:#0b4ea2}
-.cards{display:flex;flex-direction:column;gap:18px}
+.cards{display:flex;flex-direction:column;gap:18px;min-height:200px}
+.loading,.error{padding:40px;text-align:center;color:#666}
 .card{border:1px solid #e2e8f0;background:transparent}
 .card-header{background:#e8f3ff;padding:12px 16px;font-weight:600}
 .card-body{display:flex;gap:18px;align-items:center;padding:18px;background:rgba(255,255,255,0.9)}

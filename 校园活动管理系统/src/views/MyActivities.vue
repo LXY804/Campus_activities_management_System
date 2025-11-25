@@ -42,32 +42,34 @@
             </div>
           </div>
           <div class="activity-actions">
-            <button 
-              v-if="activity.canRegister && activity.status !== '进行中'" 
+            <button
+              v-if="['pending','approved'].includes(activity.registrationStatus)"
               class="btn-action btn-register"
-              @click="activity.status === '未开始' ? openCancelModal(activity.id) : handleRegister(activity.id)"
+              @click="openCancelModal(activity.id)"
             >
-              {{ activity.status === '未开始' ? '取消报名' : '点击报名' }}
+              {{ activity.registrationStatus === 'pending' ? '撤回申请' : '取消报名' }}
             </button>
-            <button 
-              v-else-if="activity.status === '进行中'"
+            <button
+              v-else
               class="btn-action btn-disabled"
               disabled
             >
-              正在进行
+              {{ activity.registrationStatus === 'cancelled' ? '已取消' : '不可操作' }}
             </button>
             <button 
               v-if="activity.canEvaluate" 
               class="btn-action btn-evaluate"
-              @click="handleEvaluate(activity.id)"
+              @click="handleEvaluate(activity.eventId)"
             >
-              点击评价
+              去评价
             </button>
           </div>
         </div>
       </div>
       <!-- 空状态 -->
-      <div v-if="filteredActivities.length === 0" class="empty-state">
+      <div v-if="loading" class="empty-state">努力加载中...</div>
+      <div v-else-if="errorMsg" class="empty-state">{{ errorMsg }}</div>
+      <div v-else-if="filteredActivities.length === 0" class="empty-state">
         <p>暂无活动数据</p>
       </div>
     </div>
@@ -87,8 +89,11 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { fetchMyRegistrations, cancelRegistration } from '@/api/registration'
 
+const router = useRouter()
 const activeTab = ref('all')
 
 const tabs = [
@@ -99,81 +104,85 @@ const tabs = [
   { key: 'completed', label: '已结束' }
 ]
 
-// 模拟活动数据
-const activities = ref([
-  {
-    id: 7717789,
-    name: '活动名称活动名称活动名称活动名称活动名称活动名称',
-    participants: 7,
-    status: '进行中',
-    college: '计算机学院',
-    keywords: '技术 交流',
-    location: '图书馆报告厅',
-    time: '12月15日14:00-16:00',
-    canRegister: true,
-    canEvaluate: false,
-    tab: 'in-progress'
-  },
-  {
-    id: 7717790,
-    name: '活动名称活动名称活动名称活动名称活动名称活动名称',
-    participants: 12,
-    status: '待评价',
-    college: '机械学院',
-    keywords: '实践 创新',
-    location: '实验楼201',
-    time: '12月20日10:00-12:00',
-    canRegister: false,
-    canEvaluate: true,
-    tab: 'to-evaluate'
-  },
-  {
-    id: 7717791,
-    name: '活动名称活动名称活动名称活动名称活动名称活动名称',
-    participants: 25,
-    status: '未开始',
-    college: '管理学院',
-    keywords: '讲座 学习',
-    location: '教学楼301',
-    time: '12月25日15:00-17:00',
-    canRegister: true,
-    canEvaluate: false,
-    tab: 'not-started'
-  },
-  {
-    id: 7717792,
-    name: '活动名称活动名称活动名称活动名称活动名称活动名称',
-    participants: 18,
-    status: '已结束',
-    college: '艺术设计学院',
-    keywords: '展览 文化',
-    location: '艺术馆',
-    time: '12月10日09:00-17:00',
-    canRegister: false,
-    canEvaluate: false,
-    tab: 'completed'
+const activities = ref([])
+const loading = ref(false)
+const errorMsg = ref('')
+
+const requireLogin = () => {
+  if (!localStorage.getItem('token')) {
+    if (confirm('此操作需要登录，是否前往登录？')) {
+      router.push('/login')
+    }
+    return false
   }
-])
+  return true
+}
+
+const statusToTab = (eventStatus, registrationStatus) => {
+  if (['open', 'ongoing'].includes(eventStatus)) return 'in-progress'
+  if (['upcoming'].includes(eventStatus)) return 'not-started'
+  if (
+    ['finished', 'ended'].includes(eventStatus) &&
+    ['approved', 'checked_in'].includes(registrationStatus)
+  ) {
+    return 'to-evaluate'
+  }
+  if (['finished', 'ended', 'cancelled'].includes(eventStatus)) return 'completed'
+  return 'all'
+}
+
+const statusLabelMap = {
+  open: '进行中',
+  ongoing: '进行中',
+  upcoming: '未开始',
+  finished: '已结束',
+  ended: '已结束',
+  cancelled: '已取消'
+}
+
+const loadActivities = async () => {
+  if (!requireLogin()) return
+  loading.value = true
+  errorMsg.value = ''
+  try {
+    const data = await fetchMyRegistrations()
+    activities.value =
+      data?.list?.map((item) => ({
+        id: item.registration_id,
+        eventId: item.event_id,
+        name: item.event_title,
+        participants: item.capacity || 0,
+        status: statusLabelMap[item.event_status] || '进行中',
+        registrationStatus: item.registration_status,
+        college: item.organizer_name || '',
+        keywords: '',
+        location: item.location,
+        time: item.start_time ? new Date(item.start_time).toLocaleString() : '',
+        canRegister: ['pending'].includes(item.registration_status),
+        canEvaluate:
+          ['finished', 'ended'].includes(item.event_status) &&
+          ['approved', 'checked_in'].includes(item.registration_status),
+        tab: statusToTab(item.event_status, item.registration_status)
+      })) || []
+  } catch (err) {
+    console.error(err)
+    errorMsg.value = err?.message || '加载报名列表失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadActivities)
 
 const filteredActivities = computed(() => {
   if (activeTab.value === 'all') {
     return activities.value
   }
-  return activities.value.filter(activity => activity.tab === activeTab.value)
+  return activities.value.filter((activity) => activity.tab === activeTab.value)
 })
 
 const cancelModalVisible = ref(false)
 const selectedActivityId = ref(null)
-
-const handleRegister = (id) => {
-  alert(`报名活动 ${id}`)
-  // 这里可以添加报名逻辑
-}
-
-const handleEvaluate = (id) => {
-  alert(`评价活动 ${id}`)
-  // 这里可以添加评价逻辑
-}
 
 const openCancelModal = (id) => {
   selectedActivityId.value = id
@@ -185,10 +194,21 @@ const closeCancelModal = () => {
   selectedActivityId.value = null
 }
 
-const confirmCancel = () => {
-  // TODO: 调用取消报名接口
-  cancelModalVisible.value = false
-  selectedActivityId.value = null
+const confirmCancel = async () => {
+  if (!selectedActivityId.value) return
+  try {
+    await cancelRegistration(selectedActivityId.value)
+    alert('已取消报名')
+    await loadActivities()
+  } catch (err) {
+    alert(err?.message || '取消失败')
+  } finally {
+    closeCancelModal()
+  }
+}
+
+const handleEvaluate = (eventId) => {
+  router.push(`/event/${eventId}`)
 }
 </script>
 

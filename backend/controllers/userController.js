@@ -1,0 +1,87 @@
+const sequelize = require('../config/database')
+const { QueryTypes } = require('sequelize')
+const { success, error } = require('../utils/response')
+
+exports.getProfile = async (req, res) => {
+  try {
+    const userId = req.user.id
+    const sql = `
+      SELECT 
+        u.user_id AS id,
+        u.username,
+        u.email,
+        u.phone,
+        u.role,
+        u.college_id,
+        c.college_name
+      FROM users u
+      LEFT JOIN colleges c ON u.college_id = c.college_id
+      WHERE u.user_id = ?
+    `
+
+    const [profile] = await sequelize.query(sql, {
+      replacements: [userId],
+      type: QueryTypes.SELECT
+    })
+
+    success(res, profile || {})
+  } catch (err) {
+    console.error('获取个人资料失败:', err)
+    error(res, '服务器错误', 500)
+  }
+}
+
+exports.updateProfile = async (req, res) => {
+  try {
+    const userId = req.user.id
+    const { phone, email, collegeId, role } = req.body
+
+    const fields = []
+    const replacements = []
+
+    if (typeof phone !== 'undefined') {
+      fields.push('phone = ?')
+      replacements.push(phone || null)
+    }
+    if (typeof email !== 'undefined') {
+      fields.push('email = ?')
+      replacements.push(email || null)
+    }
+    if (typeof collegeId !== 'undefined') {
+      fields.push('college_id = ?')
+      replacements.push(collegeId || null)
+    }
+
+    if (role && req.user.role === 'admin') {
+      fields.push('role = ?')
+      replacements.push(role)
+    }
+
+    if (!fields.length) {
+      return success(res, null, '无需更新')
+    }
+
+    replacements.push(userId)
+
+    await sequelize.query(
+      `
+        UPDATE users
+        SET ${fields.join(', ')}
+        WHERE user_id = ?
+      `,
+      {
+        replacements,
+        type: QueryTypes.UPDATE
+      }
+    )
+
+    success(res, null, '更新成功')
+  } catch (err) {
+    console.error('更新个人资料失败:', err)
+    error(res, '服务器错误', 500)
+  }
+}
+
+
+
+
