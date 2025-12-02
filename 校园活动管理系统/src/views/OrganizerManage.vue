@@ -313,6 +313,7 @@ import { ref, reactive, onMounted } from 'vue'
 import NavBar from '@/components/NavBar.vue'
 import defaultCover from '@/assets/graduation.png'
 import libraryImg from '@/assets/图书馆.webp'
+import { createEvent, fetchOrganizerEvents } from '@/api/event'
 
 const bgStyle = {
   backgroundImage: `url(${libraryImg})`,
@@ -368,21 +369,55 @@ const STORAGE_KEYS = {
 onMounted(() => {
   loadActivities()
   restoreDraft()
-  // 如果没有数据，添加一些示例数据
-  if (myActivities.value.length === 0) {
-    initSampleData()
-  }
 })
 
-// 加载活动列表
-const loadActivities = () => {
-  const stored = localStorage.getItem(STORAGE_KEYS.activities)
-  if (stored) {
-    myActivities.value = JSON.parse(stored)
+// 根据后台 admin_check 映射到前端工作流状态
+const mapWorkflowStatus = (adminCheck) => {
+  if (adminCheck === 0) return 'pending_review'
+  if (adminCheck === 1) return 'published'
+  if (adminCheck === 2) return 'rejected'
+  return 'pending_review'
+}
+
+// 加载活动列表（从后端获取自己提交的活动）
+const loadActivities = async () => {
+  try {
+    const list = await fetchOrganizerEvents()
+    myActivities.value = (list || []).map((item) => ({
+      id: item.id,
+      title: item.title,
+      subtitle: '',
+      description: item.description || '',
+      activityType: item.activity_type || '',
+      belongCollege: item.belong_college || '',
+      location: item.location || '',
+      startTime: item.start_time || '',
+      endTime: item.end_time || '',
+      registrationDeadline: '',
+      maxParticipants: item.capacity || 0,
+      enableWaitlist: false,
+      waitlistLimit: 0,
+      needApproval: true,
+      targetColleges: [],
+      targetGrades: [],
+      detailRichText: item.description || '',
+      coverImage: '',
+      attachments: [],
+      workflowStatus: mapWorkflowStatus(item.admin_check),
+      registrationStatus: 'not_started',
+      createdAt: item.created_at
+    }))
+  } catch (e) {
+    console.error('加载组织者活动列表失败:', e)
+    // 如后端不可用，则退回到本地存储（演示用）
+    const stored = localStorage.getItem(STORAGE_KEYS.activities)
+    if (stored) {
+      myActivities.value = JSON.parse(stored)
+    }
   }
 }
 
-// 保存活动列表
+// 保存活动列表（仅作为后备本地演示存储）
 const saveActivities = () => {
   localStorage.setItem(STORAGE_KEYS.activities, JSON.stringify(myActivities.value))
 }
@@ -417,12 +452,32 @@ const initSampleData = () => {
   saveActivities()
 }
 
-// 提交活动表单
-const handleSubmit = () => {
-  createActivity('pending_review')
-  window.alert('活动已提交，请等待管理员审核')
-  currentView.value = 'review'
-  clearDraft()
+// 提交活动表单（调用后端接口，进入管理员审核队列）
+const handleSubmit = async () => {
+  try {
+    const payload = {
+      title: form.title,
+      description: form.description || form.detailRichText,
+      activityType: form.activityType,
+      belongCollege: form.belongCollege,
+      location: form.location,
+      startTime: form.startTime,
+      endTime: form.endTime,
+      maxParticipants: form.maxParticipants
+    }
+
+    const created = await createEvent(payload)
+
+    // 重新从后端加载一次，确保状态与管理员端一致
+    await loadActivities()
+
+    window.alert('活动已提交，请等待管理员审核')
+    currentView.value = 'review'
+    clearDraft()
+  } catch (e) {
+    console.error('提交活动失败:', e)
+    window.alert('提交活动失败，请稍后重试')
+  }
 }
 
 const handleSaveDraft = () => {
@@ -653,7 +708,11 @@ const formatStatus = (status) => {
 }
 
 const getActivityStatusText = (activity) => {
-  return activity.workflowStatus === 'pending_review' ? '待审核' : activity.workflowStatus === 'draft' ? '草稿' : '进行中'
+  if (activity.workflowStatus === 'pending_review') return '待管理员审核'
+  if (activity.workflowStatus === 'published') return '已发布'
+  if (activity.workflowStatus === 'rejected') return '已驳回'
+  if (activity.workflowStatus === 'draft') return '草稿'
+  return '进行中'
 }
 
 const requireImage = (path) => {

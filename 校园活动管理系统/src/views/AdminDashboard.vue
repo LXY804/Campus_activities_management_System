@@ -263,31 +263,63 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import NavBar from '../components/NavBar.vue'
+import { fetchPendingEvents, approveEvent, rejectEvent } from '@/api/event'
 
 // 当前活动菜单
 const activeMenu = ref('review')
 
-// 响应式 reviewList，用于审核队列
-const reviewList = ref([
-  { name: 'AI 创新讲习营', club: '计算机协会', time: '今日 10:21', level: 'warn', levelLabel: '优先' },
-  { name: '音乐剧社迎新', club: '音乐剧社', time: '昨日 16:43', level: 'info', levelLabel: '普通' },
-  { name: '可持续校园行动', club: '环保社', time: '昨日 09:18', level: 'info', levelLabel: '普通' }
-])
+// 审核队列（从后端获取）
+const reviewList = ref([])
+
+const loadPendingEvents = async () => {
+  try {
+    const list = await fetchPendingEvents()
+    reviewList.value = list.map((item) => ({
+      creationId: item.creation_id,
+      name: item.title,
+      club: item.organizer_college || item.organizer_name || '组织者',
+      time: item.submitted_at,
+      raw: item
+    }))
+  } catch (e) {
+    console.error('获取待审核活动失败:', e)
+    showNotification('获取待审核活动失败，请稍后重试', 'warning')
+  }
+}
+
+onMounted(() => {
+  loadPendingEvents()
+})
 
 // 通过审核
-const approveActivity = (index) => {
+const approveActivity = async (index) => {
   const activity = reviewList.value[index]
-  reviewList.value.splice(index, 1)
-  showNotification(`✓ 已通过"${activity.name}"的审核`, 'success')
+  try {
+    await approveEvent(activity.creationId)
+    reviewList.value.splice(index, 1)
+    showNotification(`✓ 已通过 "${activity.name}" 的审核`, 'success')
+  } catch (e) {
+    console.error('审核通过失败:', e)
+    showNotification('审核通过失败，请稍后重试', 'warning')
+  }
 }
 
 // 驳回审核
-const rejectActivity = (index) => {
+const rejectActivity = async (index) => {
   const activity = reviewList.value[index]
-  reviewList.value.splice(index, 1)
-  showNotification(`✗ 已驳回"${activity.name}"的审核请求`, 'warning')
+
+  const remark = window.prompt(`请输入驳回 "${activity.name}" 的原因（可选）：`) || ''
+
+  try {
+    await rejectEvent(activity.creationId, remark)
+    reviewList.value.splice(index, 1)
+    showNotification(`✗ 已驳回 "${activity.name}" 的审核请求`, 'warning')
+  } catch (e) {
+    console.error('驳回审核失败:', e)
+    showNotification('驳回审核失败，请稍后重试', 'warning')
+  }
 }
 
 // 全局通知（临时实现，后续会用 Toast 组件替代）
