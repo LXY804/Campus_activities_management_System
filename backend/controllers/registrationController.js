@@ -2,24 +2,6 @@ const sequelize = require('../config/database')
 const { QueryTypes } = require('sequelize')
 const { success, error } = require('../utils/response')
 
-const registrationStatusExpr = `
-  CASE ua.apply_status
-    WHEN 0 THEN 'pending'
-    WHEN 1 THEN 'approved'
-    WHEN 2 THEN 'rejected'
-    WHEN 3 THEN 'cancelled'
-    ELSE 'pending'
-  END
-`
-
-const eventStatusExpr = `
-  CASE
-    WHEN NOW() < a.start_time THEN 'upcoming'
-    WHEN NOW() BETWEEN a.start_time AND a.end_time THEN 'open'
-    ELSE 'ended'
-  END
-`
-
 const statusMap = {
   pending: 0,
   approved: 1,
@@ -35,39 +17,37 @@ exports.getMyRegistrations = async (req, res) => {
     const offset = (parseInt(page, 10) - 1) * parseInt(pageSize, 10)
     const limit = parseInt(pageSize, 10)
 
-    let whereClause = 'WHERE ua.user_id = ?'
+    let whereClause = 'WHERE user_id = ?'
     const replacements = [userId]
 
     if (status && typeof statusMap[status] !== 'undefined') {
-      whereClause += ' AND ua.apply_status = ?'
+      whereClause += ' AND apply_status = ?'
       replacements.push(statusMap[status])
     }
 
     const listSql = `
       SELECT 
-        ua.apply_id AS registration_id,
-        ${registrationStatusExpr} AS registration_status,
-        ua.applied_at,
-        a.activity_id AS event_id,
-        a.activity_code AS event_code,
-        a.activity_name AS event_title,
-        a.location,
-        a.start_time,
-        a.end_time,
-        a.capacity,
-        ${eventStatusExpr} AS event_status,
-        u.username AS organizer_name
-      FROM user_activity_apply ua
-      INNER JOIN activities a ON ua.activity_id = a.activity_id
-      LEFT JOIN users u ON a.organizer_id = u.user_id
+        registration_id,
+        registration_status,
+        applied_at,
+        event_id,
+        event_code,
+        event_title,
+        location,
+        start_time,
+        end_time,
+        capacity,
+        event_status,
+        organizer_name
+      FROM v_user_registrations
       ${whereClause}
-      ORDER BY ua.applied_at DESC
+      ORDER BY applied_at DESC
       LIMIT ? OFFSET ?
     `
 
     const countSql = `
       SELECT COUNT(*) AS total
-      FROM user_activity_apply ua
+      FROM v_user_registrations
       ${whereClause}
     `
 

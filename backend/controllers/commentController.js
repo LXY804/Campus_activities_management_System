@@ -62,10 +62,20 @@ exports.submitComment = async (req, res) => {
     })
 
     const getSql = `
-      SELECT ac.comment_id, ac.activity_id, ac.user_id, ac.rating, ac.content, ac.created_at, u.username, 1 AS status
-      FROM activity_comments ac
-      LEFT JOIN users u ON ac.user_id = u.user_id
-      WHERE ac.comment_id = ?
+      SELECT 
+        comment_id,
+        activity_id,
+        user_id,
+        rating,
+        content,
+        created_at,
+        username,
+        event_title,
+        location,
+        start_time,
+        status
+      FROM v_activity_comments
+      WHERE comment_id = ?
     `
     const [comment] = await sequelize.query(getSql, {
       replacements: [commentId],
@@ -89,16 +99,15 @@ exports.getEventComments = async (req, res) => {
 
     const listSql = `
       SELECT 
-        ac.comment_id AS id,
-        ac.rating,
-        ac.content,
-        ac.created_at,
-        1 AS status,
-        u.username
-      FROM activity_comments ac
-      LEFT JOIN users u ON ac.user_id = u.user_id
-      WHERE ac.activity_id = ?
-      ORDER BY ac.created_at DESC
+        comment_id AS id,
+        rating,
+        content,
+        created_at,
+        status,
+        username
+      FROM v_activity_comments
+      WHERE activity_id = ?
+      ORDER BY created_at DESC
       LIMIT ? OFFSET ?
     `
 
@@ -140,19 +149,18 @@ exports.getMyComments = async (req, res) => {
 
     const listSql = `
       SELECT 
-        ac.comment_id AS id,
-        ac.rating,
-        ac.content,
-        ac.created_at,
-        1 AS status,
-        a.activity_id AS event_id,
-        a.activity_name AS event_title,
-        a.location,
-        a.start_time
-      FROM activity_comments ac
-      LEFT JOIN activities a ON ac.activity_id = a.activity_id
-      WHERE ac.user_id = ?
-      ORDER BY ac.created_at DESC
+        comment_id AS id,
+        rating,
+        content,
+        created_at,
+        status,
+        activity_id AS event_id,
+        event_title,
+        location,
+        start_time
+      FROM v_activity_comments
+      WHERE user_id = ?
+      ORDER BY created_at DESC
       LIMIT ? OFFSET ?
     `
 
