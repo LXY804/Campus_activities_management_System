@@ -247,6 +247,34 @@ exports.registerEvent = async (req, res) => {
     const { id } = req.params
     const userId = req.user.id
 
+    // 检查用户信息是否完善
+    const userInfoSql = `
+      SELECT user_id, student_id, real_name, college_id
+      FROM users
+      WHERE user_id = ?
+    `
+    const [userInfo] = await sequelize.query(userInfoSql, {
+      replacements: [userId],
+      type: QueryTypes.SELECT
+    })
+
+    if (!userInfo) {
+      return error(res, '用户不存在', 404)
+    }
+
+    // 检查必要信息是否完善（学号、真实姓名、学院）
+    const missingFields = []
+    if (!userInfo.student_id) missingFields.push('学号')
+    if (!userInfo.real_name) missingFields.push('真实姓名')
+    if (!userInfo.college_id) missingFields.push('学院')
+
+    if (missingFields.length > 0) {
+      return error(res, `请先完善个人信息：${missingFields.join('、')}`, 400, {
+        requiresProfileCompletion: true,
+        missingFields: missingFields
+      })
+    }
+
     const eventSql = `
       SELECT activity_id AS id, capacity, start_time, end_time
       FROM activities

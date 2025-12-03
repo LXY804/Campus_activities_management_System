@@ -79,7 +79,12 @@
           </div>
           <div class="form-group">
             <label>所在学院</label>
-            <input type="text" v-model="form.college" placeholder="请输入所在学院" />
+            <select v-model="form.collegeId" class="college-select">
+              <option value="">请选择学院</option>
+              <option v-for="college in colleges" :key="college.id" :value="college.id">
+                {{ college.name }}
+              </option>
+            </select>
           </div>
         </div>
 
@@ -107,7 +112,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { fetchProfile, updateProfile, uploadAvatar } from '@/api/user'
+import { fetchProfile, updateProfile, uploadAvatar, fetchColleges } from '@/api/user'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -126,9 +131,12 @@ const form = ref({
   idNumber: '',
   phone: '',
   email: '',
+  collegeId: '',
   college: '',
   class: ''
 })
+
+const colleges = ref([])
 
 const loading = ref(false)
 const avatarPreview = ref('')
@@ -150,13 +158,14 @@ const loadProfile = async () => {
     const data = await fetchProfile()
     form.value = {
       studentId: data?.student_id || '',
-      name: data?.real_name || data?.username || '',
+      name: data?.real_name || '',
       role: data?.role || '',
       gender: data?.gender || '',
-      idType: data?.id_type || '身份证',
+      idType: data?.id_type || '',
       idNumber: data?.id_number || '',
       phone: data?.phone || '',
       email: data?.email || '',
+      collegeId: data?.college_id || '',
       college: data?.college_name || '',
       class: data?.class_name || ''
     }
@@ -180,7 +189,7 @@ const handleSubmit = async () => {
       idNumber: form.value.idNumber,
       phone: form.value.phone,
       email: form.value.email,
-      // 如后续把学院改成下拉选择 collegeId，这里再传 collegeId
+      collegeId: form.value.collegeId,
       className: form.value.class
     })
     alert('信息已更新')
@@ -221,7 +230,20 @@ const onAvatarChange = async (e) => {
   }
 }
 
-onMounted(loadProfile)
+// 加载学院列表
+const loadColleges = async () => {
+  try {
+    const data = await fetchColleges()
+    colleges.value = data || []
+  } catch (err) {
+    console.error('加载学院列表失败:', err)
+  }
+}
+
+onMounted(() => {
+  loadColleges()
+  loadProfile()
+})
 </script>
 
 <style scoped>
@@ -275,7 +297,8 @@ onMounted(loadProfile)
   color: #333;
 }
 
-.form-group input {
+.form-group input,
+.form-group .college-select {
   padding: 10px 12px;
   border: 1px solid #ddd;
   border-radius: 6px;
@@ -287,13 +310,19 @@ onMounted(loadProfile)
   max-width: 100%;
 }
 
-.form-group input:focus {
+.form-group input:focus,
+.form-group .college-select:focus {
   outline: none;
   border-color: #1565c0;
 }
 
 .form-group input::placeholder {
   color: #999;
+}
+
+.form-group .college-select {
+  background-color: white;
+  cursor: pointer;
 }
 
 /* 照片区域跨两行 */

@@ -28,5 +28,6 @@ const upload = multer({ storage })
 router.get('/profile', authenticate, userController.getProfile)
 router.put('/profile', authenticate, userController.updateProfile)
 router.post('/avatar', authenticate, upload.single('avatar'), userController.uploadAvatar)
+router.get('/colleges', userController.getColleges)
 
 module.exports = router

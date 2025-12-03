@@ -154,6 +154,29 @@ exports.updateProfile = async (req, res) => {
   }
 }
 
+// 获取学院列表
+exports.getColleges = async (req, res) => {
+  try {
+    const sql = `
+      SELECT 
+        college_id as id,
+        college_name as name,
+        college_code as code
+      FROM colleges
+      ORDER BY college_name
+    `
+    
+    const colleges = await sequelize.query(sql, {
+      type: QueryTypes.SELECT
+    })
+
+    success(res, colleges)
+  } catch (err) {
+    console.error('获取学院列表失败:', err)
+    error(res, '服务器错误', 500)
+  }
+}
+
 
 
 

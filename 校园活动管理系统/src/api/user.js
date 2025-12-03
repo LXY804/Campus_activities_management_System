@@ -13,3 +13,6 @@ export const uploadAvatar = (file) => {
   })
 }
 
+// 获取学院列表
+export const fetchColleges = () => request.get('/users/colleges')
+
