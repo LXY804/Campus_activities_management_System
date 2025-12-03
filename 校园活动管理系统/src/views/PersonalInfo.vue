@@ -41,12 +41,27 @@
           <div class="photo-group">
             <label>照片</label>
             <div class="photo-container">
-              <div class="photo-placeholder">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="12" cy="7" r="4"></circle>
-                </svg>
-                <span>上传照片</span>
+              <input
+                ref="fileInput"
+                type="file"
+                accept="image/*"
+                class="hidden-file-input"
+                @change="onAvatarChange"
+              />
+              <div class="photo-placeholder" @click="triggerFileSelect">
+                <img
+                  v-if="avatarPreview"
+                  :src="avatarPreview"
+                  alt="头像预览"
+                  class="avatar-image"
+                />
+                <template v-else>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                  <span>上传照片</span>
+                </template>
               </div>
             </div>
           </div>
@@ -92,10 +107,15 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { fetchProfile, updateProfile } from '@/api/user'
+import { fetchProfile, updateProfile, uploadAvatar } from '@/api/user'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
+
+// 后端基础地址，用于拼接头像等静态资源完整 URL
+const API_ORIGIN = (
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+).replace(/\/api\/?$/, '')
 
 const form = ref({
   studentId: '',
@@ -111,6 +131,8 @@ const form = ref({
 })
 
 const loading = ref(false)
+const avatarPreview = ref('')
+const fileInput = ref(null)
 
 const requireLogin = () => {
   if (!localStorage.getItem('token')) {
@@ -131,13 +153,15 @@ const loadProfile = async () => {
       name: data?.real_name || data?.username || '',
       role: data?.role || '',
       gender: data?.gender || '',
-      idType: '身份证',
-      idNumber: '',
+      idType: data?.id_type || '身份证',
+      idNumber: data?.id_number || '',
       phone: data?.phone || '',
       email: data?.email || '',
-      college: data?.department || '',
-      class: data?.grade || ''
+      college: data?.college_name || '',
+      class: data?.class_name || ''
     }
+    // 头像：后端字段为 image，这里拼接成完整 URL
+    avatarPreview.value = data?.image ? API_ORIGIN + data.image : ''
   } catch (err) {
     alert(err?.message || '加载个人信息失败')
   }
@@ -152,9 +176,11 @@ const handleSubmit = async () => {
       realName: form.value.name,
       role: form.value.role,
       gender: form.value.gender,
+      idType: form.value.idType,
+      idNumber: form.value.idNumber,
       phone: form.value.phone,
       email: form.value.email,
-      college: form.value.college,
+      // 如后续把学院改成下拉选择 collegeId，这里再传 collegeId
       className: form.value.class
     })
     alert('信息已更新')
@@ -162,6 +188,36 @@ const handleSubmit = async () => {
     alert(err?.message || '更新失败')
   } finally {
     loading.value = false
+  }
+}
+
+const triggerFileSelect = () => {
+  if (!requireLogin()) return
+  fileInput.value && fileInput.value.click()
+}
+
+const onAvatarChange = async (e) => {
+  const file = e.target.files?.[0]
+  if (!file) return
+
+  // 本地预览
+  const localUrl = URL.createObjectURL(file)
+  avatarPreview.value = localUrl
+
+  try {
+    const res = await uploadAvatar(file)
+    // 用后端返回的正式地址替换本地 blob 地址
+    if (res && res.image) {
+      avatarPreview.value = API_ORIGIN + res.image
+    } else if (res?.data?.image) {
+      avatarPreview.value = API_ORIGIN + res.data.image
+    }
+    alert('头像上传成功')
+  } catch (err) {
+    alert(err?.message || '头像上传失败')
+  } finally {
+    // 允许重复选择同一文件
+    e.target.value = ''
   }
 }
 
@@ -266,8 +322,8 @@ onMounted(loadProfile)
 }
 
 .photo-placeholder {
-  width: 135px;
-  height: 135px;
+  width: 120px;
+  height: 120px;
   border: 2px dashed #ddd;
   border-radius: 8px;
   display: flex;
@@ -279,6 +335,18 @@ onMounted(loadProfile)
   cursor: pointer;
   transition: all 0.3s;
   transform: scale(0.9);
+}
+
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  object-fit: cover;
+  display: block;
+}
+
+.hidden-file-input {
+  display: none;
 }
 
 .photo-placeholder:hover {

@@ -47,91 +47,95 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
 import gradImg from '@/assets/graduation.png'
+import { fetchEventDetail, registerEvent } from '@/api/event'
 
 const router = useRouter()
 const route = useRoute()
-const id = route.params.id || 1
+const id = route.params.id
 
 const event = ref({})
+const loading = ref(false)
+const errorMsg = ref('')
 
 const formattedDate = computed(() => {
-  if (!event.value.date) return ''
-  return new Date(event.value.date).toLocaleString()
+  if (!event.value.start_time) return ''
+  return new Date(event.value.start_time).toLocaleString()
 })
 
-const day = computed(() => event.value.date ? new Date(event.value.date).getDate() : '')
-const month = computed(() => event.value.date ? (new Date(event.value.date).getMonth() + 1) + '月' : '')
-const year = computed(() => event.value.date ? new Date(event.value.date).getFullYear() : '')
+const day = computed(() =>
+  event.value.start_time ? new Date(event.value.start_time).getDate() : ''
+)
+const month = computed(() =>
+  event.value.start_time ? (new Date(event.value.start_time).getMonth() + 1) + '月' : ''
+)
+const year = computed(() =>
+  event.value.start_time ? new Date(event.value.start_time).getFullYear() : ''
+)
 
-const isFull = computed(() => event.value.capacity && event.value.signed_up >= event.value.capacity)
+const isFull = computed(
+  () => event.value.capacity && event.value.signed_up >= event.value.capacity
+)
 
-function goBack() { router.back() }
+function goBack() {
+  router.back()
+}
 
-function handleRegister() {
+const requireLogin = () => {
+  if (!localStorage.getItem('token')) {
+    if (confirm('此操作需要登录，是否前往登录？')) {
+      router.push('/login')
+    }
+    return false
+  }
+  return true
+}
+
+const loadEventDetail = async () => {
+  loading.value = true
+  errorMsg.value = ''
+  try {
+    const data = await fetchEventDetail(id)
+    event.value = {
+      id: data.id,
+      title: data.title,
+      start_time: data.start_time,
+      end_time: data.end_time,
+      location: data.location,
+      image: data.cover_url || gradImg,
+      organizer: data.organizer_name || '学校',
+      capacity: data.capacity || 0,
+      signed_up: data.signed_up || 0,
+      excerpt: data.description || '',
+      description_html: data.description_html || data.description || ''
+    }
+  } catch (e) {
+    console.error(e)
+    errorMsg.value = e?.message || '加载活动详情失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleRegister() {
   if (isFull.value) return
-  // 简单示例：本地提示
-  alert('报名请求已发送（示例）')
+  if (!requireLogin()) return
+
+  try {
+    await registerEvent(id)
+    alert('报名成功，等待审核')
+    await loadEventDetail()
+  } catch (e) {
+    console.error(e)
+    const msg =
+      e?.response?.data?.message ||
+      e?.message ||
+      '报名失败'
+    alert(msg)
+  }
 }
 
 onMounted(() => {
-  // 使用 mock 数据展示，按 id 返回对应的活动信息（后续替换为接口请求）
-  const mockEvents = {
-    '1': {
-      id: 1,
-      title: '毕业典礼志愿者招募',
-      date: '2025-12-01T09:00:00',
-      location: '体育馆主会场',
-      image: gradImg,
-      organizer: '学生会',
-      capacity: 300,
-      signed_up: 56,
-      excerpt: '加入志愿团队，为毕业生送上温暖与秩序。',
-      description_html: '<p>欢迎加入毕业典礼志愿者团队，我们将为你提供培训、餐饮与志愿者证书。</p><p>岗位包括签到引导、会场秩序维护、舞台协助与来宾接待等。</p>'
-    },
-    '2': {
-      id: 2,
-      title: '校园文化节讲座',
-      date: '2025-06-01T14:00:00',
-      location: '报告厅A',
-      image: gradImg,
-      organizer: '人文学院',
-      capacity: 120,
-      signed_up: 78,
-      excerpt: '主题：当代文学与文化传承',
-      description_html: '<p>邀请校内外专家学者，探讨文学与文化传承的当代价值。</p>'
-    },
-    '3': {
-      id: 3,
-      title: '图书馆读书交流会',
-      date: '2025-06-20T18:00:00',
-      location: '图书馆多功能厅',
-      image: gradImg,
-      organizer: '图书馆',
-      capacity: 50,
-      signed_up: 12,
-      excerpt: '分享好书，交流读书心得。',
-      description_html: '<p>欢迎所有喜欢阅读的同学参加，现场将有小范围的沙龙讨论。</p>'
-    }
-  }
-
-  // 读取对应 id 的 mock 数据，若不存在则展示默认项
-  const picked = mockEvents[String(id)]
-  if (picked) {
-    event.value = picked
-  } else {
-    event.value = {
-      id,
-      title: '未找到的活动',
-      date: '',
-      location: '',
-      image: gradImg,
-      organizer: '',
-      capacity: 0,
-      signed_up: 0,
-      excerpt: '未能加载该活动的详细信息。',
-      description_html: '<p>抱歉，无法找到指定的活动。</p>'
-    }
-  }
+  loadEventDetail()
 })
 </script>
 

@@ -12,7 +12,19 @@
         <aside class="sidebar">
         <div class="user-info">
           <div class="user-avatar">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <img
+              v-if="avatarUrl"
+              :src="avatarUrl"
+              alt="用户头像"
+              class="avatar-image"
+            />
+            <svg
+              v-else
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
               <circle cx="12" cy="7" r="4"></circle>
             </svg>
@@ -86,6 +98,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
 import libraryImg from '@/assets/图书馆.webp'
+import { fetchProfile } from '@/api/user'
 
 const bgStyle = {
   backgroundImage: `url(${libraryImg})`,
@@ -97,16 +110,38 @@ const bgStyle = {
 }
 const router = useRouter()
 const username = ref('用户名')
+const avatarUrl = ref('')
 
-onMounted(() => {
+// 后端基础地址，用于拼接头像完整 URL
+const API_ORIGIN = (
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+).replace(/\/api\/?$/, '')
+
+onMounted(async () => {
   // 检查登录状态
   const isLoggedIn = localStorage.getItem('isLoggedIn')
   const savedUsername = localStorage.getItem('username')
   
   if (!isLoggedIn) {
     router.push('/login')
+    return
   } else if (savedUsername) {
     username.value = savedUsername
+  }
+
+  // 加载个人资料获取头像（以及更准确的姓名）
+  try {
+    const profile = await fetchProfile()
+    if (profile) {
+      if (profile.real_name || profile.username) {
+        username.value = profile.real_name || profile.username
+      }
+      if (profile.image) {
+        avatarUrl.value = API_ORIGIN + profile.image
+      }
+    }
+  } catch (e) {
+    // 头像加载失败不影响页面其他功能，静默忽略
   }
   
   // 如果直接访问 /personal，默认跳转到 /personal/activities
@@ -203,6 +238,13 @@ onMounted(() => {
   width: 32px;
   height: 32px;
   color: #666;
+}
+
+.user-avatar .avatar-image {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
 }
 
 .username {

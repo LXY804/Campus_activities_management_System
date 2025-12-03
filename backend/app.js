@@ -1,20 +1,37 @@
 const express = require('express')
 const cors = require('cors')
+const path = require('path')
 require('dotenv').config()
 
 const app = express()
 
 // 中间件
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-  credentials: true
-}))
+// 开发环境下放宽 CORS，允许本机任意端口的前端访问（如 5173 / 5174 / 5175）
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // 无 origin（如 Postman）直接放行
+      if (!origin) return callback(null, true)
+      // 只要是本机 localhost 源都允许
+      if (origin.startsWith('http://localhost')) {
+        return callback(null, true)
+      }
+      // 其他来源拒绝
+      return callback(new Error('Not allowed by CORS'))
+    },
+    credentials: true
+  })
+)
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
+
+// 静态资源：头像等上传文件
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 
 // 路由
 app.use('/api/auth', require('./routes/auth'))
 app.use('/api/events', require('./routes/events'))
+app.use('/api/organizer', require('./routes/organizer'))
 app.use('/api/registrations', require('./routes/registrations'))
 app.use('/api/comments', require('./routes/comments'))
 app.use('/api/users', require('./routes/users'))

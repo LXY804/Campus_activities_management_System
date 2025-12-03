@@ -56,6 +56,16 @@ exports.getMyRegistrations = async (req, res) => {
         a.end_time,
         a.capacity,
         ${eventStatusExpr} AS event_status,
+        -- 是否已评论：1 表示已评论，0 表示未评论
+        CASE 
+          WHEN EXISTS (
+            SELECT 1 
+            FROM activity_comments ac 
+            WHERE ac.activity_id = a.activity_id 
+              AND ac.user_id = ua.user_id
+          ) THEN 1 
+          ELSE 0 
+        END AS has_comment,
         u.username AS organizer_name
       FROM user_activity_apply ua
       INNER JOIN activities a ON ua.activity_id = a.activity_id

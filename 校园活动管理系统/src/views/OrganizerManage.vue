@@ -213,9 +213,9 @@
                   <span>时间：{{ formatDateRange(activity.startTime, activity.endTime) }}</span>
                 </p>
                 <div class="activity-card__stats">
-                  <span>总报名：{{ getActivityStats(activity.id).total }}</span>
-                  <span>待审核：{{ getActivityStats(activity.id).pending }}</span>
-                  <span>已通过：{{ getActivityStats(activity.id).approved }}</span>
+                  <span>总报名：{{ activity.totalApplications || 0 }}</span>
+                  <span>待审核：{{ activity.pendingApplications || 0 }}</span>
+                  <span>已通过：{{ activity.approvedApplications || 0 }}</span>
                 </div>
               </div>
               <div class="activity-card__action">
@@ -313,6 +313,11 @@ import { ref, reactive, onMounted } from 'vue'
 import NavBar from '@/components/NavBar.vue'
 import defaultCover from '@/assets/graduation.png'
 import libraryImg from '@/assets/图书馆.webp'
+import {
+  fetchMyActivities,
+  fetchActivityApplications,
+  updateApplicationStatus
+} from '@/api/organizer'
 
 const bgStyle = {
   backgroundImage: `url(${libraryImg})`,
@@ -354,111 +359,63 @@ const getDefaultForm = () => ({
 // 表单数据
 const form = reactive(getDefaultForm())
 
-// 我的活动列表
+// 我的活动列表（从后端获取）
 const myActivities = ref([])
 
-// 报名数据存储键
-const STORAGE_KEYS = {
-  activities: 'organizer_activities',
-  applications: 'organizer_applications',
-  draft: 'organizer_publish_draft'
-}
-
-// 初始化数据
+// 初始化数据：从后端加载活动
 onMounted(() => {
-  loadActivities()
+  loadActivitiesFromApi()
   restoreDraft()
-  // 如果没有数据，添加一些示例数据
-  if (myActivities.value.length === 0) {
-    initSampleData()
-  }
 })
 
-// 加载活动列表
-const loadActivities = () => {
-  const stored = localStorage.getItem(STORAGE_KEYS.activities)
-  if (stored) {
-    myActivities.value = JSON.parse(stored)
+const loadActivitiesFromApi = async () => {
+  try {
+    const list = await fetchMyActivities()
+    // 直接使用后端返回结构，做轻量映射以适配现有模板字段
+    myActivities.value =
+      list?.map((item) => ({
+        id: item.id,
+        title: item.title,
+        subtitle: '',
+        description: '',
+        activityType: '',
+        belongCollege: item.target_college_name || '',
+        location: item.location,
+        startTime: item.start_time,
+        endTime: item.end_time,
+        registrationDeadline: '',
+        maxParticipants: item.capacity || 0,
+        enableWaitlist: false,
+        waitlistLimit: 0,
+        needApproval: true,
+        targetColleges: [],
+        targetGrades: [],
+        detailRichText: '',
+        coverImage: '',
+        attachments: [],
+        workflowStatus: 'published',
+        registrationStatus: 'not_started',
+        createdAt: item.start_time,
+        // 报名统计
+        totalApplications: item.total_applications || 0,
+        pendingApplications: item.pending_applications || 0,
+        approvedApplications: item.approved_applications || 0
+      })) || []
+  } catch (e) {
+    console.error(e)
+    window.alert(e?.message || '加载活动失败')
   }
-}
-
-// 保存活动列表
-const saveActivities = () => {
-  localStorage.setItem(STORAGE_KEYS.activities, JSON.stringify(myActivities.value))
-}
-
-// 初始化示例数据
-const initSampleData = () => {
-  const sampleActivity = {
-    id: Date.now(),
-    title: 'AI创新讲习营',
-    subtitle: '探索人工智能的前沿技术与应用',
-    description: '探索人工智能的前沿技术与应用',
-    activityType: '学术讲座',
-    belongCollege: '计算机学院',
-    location: '学术报告厅',
-    startTime: '2024-01-15T10:00:00',
-    endTime: '2024-01-15T17:00:00',
-    registrationDeadline: '2024-01-14T18:00:00',
-    maxParticipants: 50,
-    enableWaitlist: true,
-    waitlistLimit: 20,
-    needApproval: true,
-    targetColleges: ['计算机学院', '软件学院'],
-    targetGrades: ['大一', '大二'],
-    detailRichText: '围绕人工智能发展趋势展开的讲习营，大咖分享+实战体验。',
-    coverImage: '',
-    attachments: [],
-    workflowStatus: 'pending_review',
-    registrationStatus: 'not_started',
-    createdAt: new Date().toISOString()
-  }
-  myActivities.value = [sampleActivity]
-  saveActivities()
 }
 
 // 提交活动表单
+// 目前发布活动仍是前端示例表单，这里只做本地提示
 const handleSubmit = () => {
-  createActivity('pending_review')
-  window.alert('活动已提交，请等待管理员审核')
-  currentView.value = 'review'
-  clearDraft()
+  window.alert('当前发布活动功能尚未接入后端，主要演示报名审核流程')
 }
 
 const handleSaveDraft = () => {
-  localStorage.setItem(STORAGE_KEYS.draft, JSON.stringify(form))
+  localStorage.setItem('organizer_publish_draft', JSON.stringify(form))
   window.alert('已保存草稿')
-}
-
-const createActivity = (workflowStatus) => {
-  const newActivity = {
-    id: Date.now(),
-    title: form.title,
-    subtitle: form.subtitle,
-    description: form.description || form.detailRichText.slice(0, 80),
-    activityType: form.activityType,
-    belongCollege: form.belongCollege,
-    location: form.location,
-    startTime: form.startTime,
-    endTime: form.endTime,
-    registrationDeadline: form.registrationDeadline,
-    maxParticipants: form.maxParticipants,
-    enableWaitlist: form.enableWaitlist,
-    waitlistLimit: form.waitlistLimit,
-    needApproval: form.needApproval,
-    targetColleges: [...form.targetColleges],
-    targetGrades: [...form.targetGrades],
-    detailRichText: form.detailRichText,
-    coverImage: form.coverImage,
-    attachments: [...form.attachments],
-    workflowStatus,
-    registrationStatus: 'not_started',
-    createdAt: new Date().toISOString()
-  }
-
-  myActivities.value.push(newActivity)
-  saveActivities()
-  resetForm()
 }
 
 const resetForm = () => {
@@ -466,14 +423,14 @@ const resetForm = () => {
 }
 
 const restoreDraft = () => {
-  const stored = localStorage.getItem(STORAGE_KEYS.draft)
+  const stored = localStorage.getItem('organizer_publish_draft')
   if (stored) {
     Object.assign(form, getDefaultForm(), JSON.parse(stored))
   }
 }
 
 const clearDraft = () => {
-  localStorage.removeItem(STORAGE_KEYS.draft)
+  localStorage.removeItem('organizer_publish_draft')
 }
 
 const handleCoverUpload = (event) => {
@@ -488,71 +445,23 @@ const handleAttachmentUpload = (event) => {
   form.attachments = files.map(file => file.name)
 }
 
-// 获取活动统计数据
-const getActivityStats = (activityId) => {
-  const applications = getApplicationsByActivity(activityId)
-  return {
-    total: applications.length,
-    pending: applications.filter(app => app.status === 'pending').length,
-    approved: applications.filter(app => app.status === 'approved').length,
-    rejected: applications.filter(app => app.status === 'rejected').length
-  }
-}
-
-// 获取活动的报名列表
-const getApplicationsByActivity = (activityId) => {
-  const stored = localStorage.getItem(STORAGE_KEYS.applications)
-  if (!stored) return []
-  const allApplications = JSON.parse(stored)
-  return allApplications.filter(app => app.activityId === activityId)
-}
-
 // 打开审核面板
-const openReviewPanel = (activity) => {
+const openReviewPanel = async (activity) => {
   selectedActivity.value = activity
-  currentApplications.value = getApplicationsByActivity(activity.id)
-  
-  // 如果没有报名数据，添加一些示例数据
-  if (currentApplications.value.length === 0) {
-    initSampleApplications(activity.id)
-    currentApplications.value = getApplicationsByActivity(activity.id)
+  try {
+    const list = await fetchActivityApplications(activity.id)
+    currentApplications.value =
+      list?.map((item) => ({
+        id: item.id,
+        activityId: activity.id,
+        userName: item.user_name,
+        applyTime: item.apply_time,
+        status: item.status // pending / approved / rejected / cancelled
+      })) || []
+  } catch (e) {
+    console.error(e)
+    window.alert(e?.message || '加载报名列表失败')
   }
-}
-
-// 初始化示例报名数据
-const initSampleApplications = (activityId) => {
-  const stored = localStorage.getItem(STORAGE_KEYS.applications)
-  const allApplications = stored ? JSON.parse(stored) : []
-  
-  const sampleApps = [
-    {
-      id: Date.now(),
-      activityId: activityId,
-      userName: '张三',
-      userStudentId: '2021001',
-      applyTime: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      status: 'pending'
-    },
-    {
-      id: Date.now() + 1,
-      activityId: activityId,
-      userName: '李四',
-      userStudentId: '2021002',
-      applyTime: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      status: 'pending'
-    },
-    {
-      id: Date.now() + 2,
-      activityId: activityId,
-      userName: '王五',
-      userStudentId: '2021003',
-      applyTime: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-      status: 'approved'
-    }
-  ]
-  
-  allApplications.push(...sampleApps)
-  localStorage.setItem(STORAGE_KEYS.applications, JSON.stringify(allApplications))
 }
 
 // 关闭审核面板
@@ -562,42 +471,31 @@ const closeReviewPanel = () => {
 }
 
 // 审核通过
-const handleApprove = (app) => {
-  const stored = localStorage.getItem(STORAGE_KEYS.applications)
-  if (!stored) return
-  
-  const allApplications = JSON.parse(stored)
-  const index = allApplications.findIndex(a => a.id === app.id)
-  if (index !== -1) {
-    allApplications[index].status = 'approved'
-    localStorage.setItem(STORAGE_KEYS.applications, JSON.stringify(allApplications))
-    
-    // 更新当前显示的列表
+const handleApprove = async (app) => {
+  if (!window.confirm('确定通过该报名申请吗？')) return
+  try {
+    await updateApplicationStatus(app.id, 'approved')
     app.status = 'approved'
-    
     window.alert('已通过该报名申请')
+  } catch (e) {
+    console.error(e)
+    window.alert(e?.message || '操作失败')
   }
 }
 
 // 审核拒绝
-const handleReject = (app) => {
+const handleReject = async (app) => {
   if (!window.confirm('确定要拒绝该报名申请吗？')) {
     return
   }
-  
-  const stored = localStorage.getItem(STORAGE_KEYS.applications)
-  if (!stored) return
-  
-  const allApplications = JSON.parse(stored)
-  const index = allApplications.findIndex(a => a.id === app.id)
-  if (index !== -1) {
-    allApplications[index].status = 'rejected'
-    localStorage.setItem(STORAGE_KEYS.applications, JSON.stringify(allApplications))
-    
-    // 更新当前显示的列表
+
+  try {
+    await updateApplicationStatus(app.id, 'rejected')
     app.status = 'rejected'
-    
     window.alert('已拒绝该报名申请')
+  } catch (e) {
+    console.error(e)
+    window.alert(e?.message || '操作失败')
   }
 }
 
@@ -831,7 +729,7 @@ const requireImage = (path) => {
 }
 .form-row{
   display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-template-columns:repeat(2,minmax(0,1fr));
   gap:20px;
 }
 .form-field label{

@@ -32,6 +32,9 @@
               <div class="activity-meta">
                 <span class="meta-item">参与人数: {{ activity.participants }}</span>
                 <span class="meta-item">活动状态: {{ activity.status }}</span>
+                <span class="meta-item">
+                  报名状态: {{ registrationStatusLabelMap[activity.registrationStatus] || '未知' }}
+                </span>
               </div>
               <div class="activity-info-text">
                 <span>学院: {{ activity.college }}</span>
@@ -108,6 +111,14 @@ const activities = ref([])
 const loading = ref(false)
 const errorMsg = ref('')
 
+// 报名状态文案映射：pending/approved/rejected/cancelled -> 待审核/已通过/已拒绝/已取消
+const registrationStatusLabelMap = {
+  pending: '待审核',
+  approved: '已通过',
+  rejected: '已拒绝',
+  cancelled: '已取消'
+}
+
 const requireLogin = () => {
   if (!localStorage.getItem('token')) {
     if (confirm('此操作需要登录，是否前往登录？')) {
@@ -118,14 +129,18 @@ const requireLogin = () => {
   return true
 }
 
-const statusToTab = (eventStatus, registrationStatus) => {
+const statusToTab = (eventStatus, registrationStatus, hasComment) => {
+  // 报名还在待审核：只放在“全部”里，不进其他分类
+  if (registrationStatus === 'pending') return 'all'
+
   if (['open', 'ongoing'].includes(eventStatus)) return 'in-progress'
   if (['upcoming'].includes(eventStatus)) return 'not-started'
   if (
     ['finished', 'ended'].includes(eventStatus) &&
     ['approved', 'checked_in'].includes(registrationStatus)
   ) {
-    return 'to-evaluate'
+    // 已结束且已通过：如果还没评论 -> 待评价；如果已评论 -> 已结束
+    return hasComment ? 'completed' : 'to-evaluate'
   }
   if (['finished', 'ended', 'cancelled'].includes(eventStatus)) return 'completed'
   return 'all'
@@ -159,10 +174,12 @@ const loadActivities = async () => {
         location: item.location,
         time: item.start_time ? new Date(item.start_time).toLocaleString() : '',
         canRegister: ['pending'].includes(item.registration_status),
+        // 只有结束且通过且尚未评论的活动才可评价
         canEvaluate:
           ['finished', 'ended'].includes(item.event_status) &&
-          ['approved', 'checked_in'].includes(item.registration_status),
-        tab: statusToTab(item.event_status, item.registration_status)
+          ['approved', 'checked_in'].includes(item.registration_status) &&
+          !item.has_comment,
+        tab: statusToTab(item.event_status, item.registration_status, item.has_comment)
       })) || []
   } catch (err) {
     console.error(err)

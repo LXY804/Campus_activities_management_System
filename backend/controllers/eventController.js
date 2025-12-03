@@ -156,11 +156,9 @@ exports.registerEvent = async (req, res) => {
     }
 
     const now = new Date()
-    if (event.start_time && new Date(event.start_time) > now) {
-      // 报名窗口提前开放，可根据需求调整；此处允许提前报名
-    }
-    if (event.end_time && new Date(event.end_time) < now) {
-      return error(res, '活动已结束，无法报名', 400)
+    // 规则调整：活动开始后不再允许报名（不再使用 end_time 判断结束）
+    if (event.start_time && new Date(event.start_time) <= now) {
+      return error(res, '活动已开始，无法报名', 400)
     }
 
     const existingSql = `
