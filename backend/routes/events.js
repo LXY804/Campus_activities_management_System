@@ -16,7 +16,7 @@ router.get(
   '/organizer/mine',
   authenticate,
   authorize('organizer', 'admin'),
-  organizerController.getMyEvents
+  organizerController.getMyActivities
 )
 
 // 管理员审核队列
