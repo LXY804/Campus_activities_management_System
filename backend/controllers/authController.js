@@ -5,10 +5,16 @@ const { success, error } = require('../utils/response')
 
 exports.login = async (req, res) => {
   try {
-    const { username, password, role } = req.body
+    const { userId, password, role } = req.body
 
-    if (!username || !password) {
-      return error(res, '用户名和密码不能为空', 400)
+    if (!userId || !password) {
+      return error(res, '用户ID和密码不能为空', 400)
+    }
+
+    // 验证 userId 是否为数字
+    const userIdNum = parseInt(userId, 10)
+    if (isNaN(userIdNum) || userIdNum <= 0) {
+      return error(res, '用户ID必须是有效的数字', 400)
     }
 
     const sql = `
@@ -21,22 +27,26 @@ exports.login = async (req, res) => {
         phone,
         college_id
       FROM users
-      WHERE username = ?
+      WHERE user_id = ?
     `
     const [user] = await sequelize.query(sql, {
-      replacements: [username],
+      replacements: [userIdNum],
       type: QueryTypes.SELECT
     })
 
+    // 用户不存在
     if (!user) {
-      return error(res, '用户名或密码错误', 401)
+      return error(res, '该用户暂未注册', 401)
     }
+    
+    // 角色验证
     if (role && user.role !== role) {
       return error(res, '身份验证失败，请选择正确的身份', 403)
     }
 
+    // 密码错误
     if (password !== user.password_hash) {
-      return error(res, '用户名或密码错误', 401)
+      return error(res, '账号或密码错误', 401)
     }
 
     const token = generateToken({

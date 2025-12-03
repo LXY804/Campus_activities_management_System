@@ -53,6 +53,26 @@ const router = useRouter()
 const route = useRoute()
 const id = route.params.id
 
+// 后端基础地址，用于拼接封面图片等静态资源完整 URL
+const API_ORIGIN = (
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+).replace(/\/api\/?$/, '')
+
+// 构建图片URL
+const buildImageUrl = (coverUrl) => {
+  if (!coverUrl) return gradImg
+  // 如果已经是完整URL，直接返回
+  if (coverUrl.startsWith('http://') || coverUrl.startsWith('https://')) {
+    return coverUrl
+  }
+  let normalized = coverUrl.replace(/\\/g, '/')
+  if (!normalized.startsWith('/')) {
+    normalized = '/' + normalized
+  }
+  // 如果是相对路径，拼接API基础地址
+  return API_ORIGIN + normalized
+}
+
 const event = ref({})
 const loading = ref(false)
 const errorMsg = ref('')
@@ -101,7 +121,7 @@ const loadEventDetail = async () => {
       start_time: data.start_time,
       end_time: data.end_time,
       location: data.location,
-      image: data.cover_url || gradImg,
+      image: buildImageUrl(data.cover_url),
       organizer: data.organizer_name || '学校',
       capacity: data.capacity || 0,
       signed_up: data.signed_up || 0,

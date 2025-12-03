@@ -4,14 +4,33 @@
     
     <!-- 标签页 -->
     <div class="tabs">
-      <button 
-        v-for="tab in tabs" 
-        :key="tab.key"
-        :class="['tab', { active: activeTab === tab.key }]"
-        @click="activeTab = tab.key"
-      >
-        {{ tab.label }}
-      </button>
+      <div class="tabs-left">
+        <button 
+          v-for="tab in tabs" 
+          :key="tab.key"
+          :class="['tab', { active: activeTab === tab.key }]"
+          @click="activeTab = tab.key"
+        >
+          {{ tab.label }}
+        </button>
+      </div>
+      <!-- 活动分类筛选 -->
+      <div class="filter-section">
+        <select 
+          v-model="selectedTypeId" 
+          class="type-select"
+          @change="handleTypeChange"
+        >
+          <option value="">全部类型</option>
+          <option 
+            v-for="type in activityTypes" 
+            :key="type.id" 
+            :value="type.id"
+          >
+            {{ type.name }}
+          </option>
+        </select>
+      </div>
     </div>
 
     <!-- 活动列表（可滚动区域） -->
@@ -25,7 +44,7 @@
           <div class="activity-info">
             <div class="activity-id">活动编号: {{ activity.id }}</div>
             <div class="activity-image">
-              <div class="image-placeholder">活动图片</div>
+              <img :src="buildImageUrl(activity.image)" alt="活动图片" @error="handleImageError($event)" />
             </div>
             <div class="activity-details">
               <h3 class="activity-name">{{ activity.name }}</h3>
@@ -45,15 +64,16 @@
             </div>
           </div>
           <div class="activity-actions">
+            <!-- 只有活动未结束时才显示取消报名按钮 -->
             <button
-              v-if="['pending','approved'].includes(activity.registrationStatus)"
+              v-if="['pending','approved'].includes(activity.registrationStatus) && !['ended', 'finished'].includes(activity.eventStatus)"
               class="btn-action btn-register"
               @click="openCancelModal(activity.id)"
             >
               {{ activity.registrationStatus === 'pending' ? '撤回申请' : '取消报名' }}
             </button>
             <button
-              v-else
+              v-else-if="!['ended', 'finished'].includes(activity.eventStatus)"
               class="btn-action btn-disabled"
               disabled
             >
@@ -95,9 +115,33 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchMyRegistrations, cancelRegistration } from '@/api/registration'
+import { fetchActivityTypes } from '@/api/event'
+import gradImg from '@/assets/graduation.png'
 
 const router = useRouter()
 const activeTab = ref('all')
+
+// 后端基础地址，用于拼接封面图片等静态资源完整 URL
+const API_ORIGIN = (
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+).replace(/\/api\/?$/, '')
+
+// 构建图片URL
+const buildImageUrl = (coverUrl) => {
+  if (!coverUrl || coverUrl === '' || coverUrl === 'null' || coverUrl === 'undefined') {
+    return gradImg
+  }
+  // 如果已经是完整URL，直接返回
+  if (coverUrl.startsWith('http://') || coverUrl.startsWith('https://')) {
+    return coverUrl
+  }
+  let normalized = coverUrl.replace(/\\/g, '/')
+  if (!normalized.startsWith('/')) {
+    normalized = '/' + normalized
+  }
+  // 如果是相对路径，拼接API基础地址
+  return API_ORIGIN + normalized
+}
 
 const tabs = [
   { key: 'all', label: '全部' },
@@ -110,6 +154,8 @@ const tabs = [
 const activities = ref([])
 const loading = ref(false)
 const errorMsg = ref('')
+const activityTypes = ref([])
+const selectedTypeId = ref('')
 
 // 报名状态文案映射：pending/approved/rejected/cancelled -> 待审核/已通过/已拒绝/已取消
 const registrationStatusLabelMap = {
@@ -166,13 +212,16 @@ const loadActivities = async () => {
         id: item.registration_id,
         eventId: item.event_id,
         name: item.event_title,
+        image: item.cover_url || '', // 添加图片URL
         participants: item.capacity || 0,
         status: statusLabelMap[item.event_status] || '进行中',
+        eventStatus: item.event_status, // 保存原始状态用于判断
         registrationStatus: item.registration_status,
         college: item.organizer_name || '',
         keywords: '',
         location: item.location,
         time: item.start_time ? new Date(item.start_time).toLocaleString() : '',
+        type_id: item.type_id, // 保存活动类型ID用于筛选
         canRegister: ['pending'].includes(item.registration_status),
         // 只有结束且通过且尚未评论的活动才可评价
         canEvaluate:
@@ -189,13 +238,38 @@ const loadActivities = async () => {
   }
 }
 
-onMounted(loadActivities)
+const loadActivityTypes = async () => {
+  try {
+    const types = await fetchActivityTypes()
+    activityTypes.value = types || []
+  } catch (err) {
+    console.error('加载活动类型失败:', err)
+  }
+}
+
+const handleTypeChange = () => {
+  // 类型筛选在前端 computed 中处理，这里不需要重新加载数据
+}
+
+onMounted(() => {
+  loadActivityTypes()
+  loadActivities()
+})
 
 const filteredActivities = computed(() => {
-  if (activeTab.value === 'all') {
-    return activities.value
+  let result = activities.value
+  
+  // 按状态标签筛选
+  if (activeTab.value !== 'all') {
+    result = result.filter((activity) => activity.tab === activeTab.value)
   }
-  return activities.value.filter((activity) => activity.tab === activeTab.value)
+  
+  // 按活动类型筛选
+  if (selectedTypeId.value) {
+    result = result.filter((activity) => activity.type_id === parseInt(selectedTypeId.value))
+  }
+  
+  return result
 })
 
 const cancelModalVisible = ref(false)
@@ -225,7 +299,15 @@ const confirmCancel = async () => {
 }
 
 const handleEvaluate = (eventId) => {
-  router.push(`/event/${eventId}`)
+  router.push({ name: 'EventEvaluate', params: { id: eventId } })
+}
+
+// 图片加载错误处理
+const handleImageError = (event) => {
+  // 如果图片加载失败，使用默认图片
+  if (event.target.src !== gradImg) {
+    event.target.src = gradImg
+  }
 }
 </script>
 
@@ -243,9 +325,41 @@ const handleEvaluate = (eventId) => {
 
 .tabs {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   border-bottom: 2px solid #eee;
   margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.tabs-left {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+}
+
+.filter-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.type-select {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fff;
+  font-size: 16px;
+  color: #333;
+  cursor: pointer;
+  min-width: 150px;
+  transition: border-color 0.2s;
+}
+
+.type-select:focus {
+  outline: none;
+  border-color: #1565c0;
 }
 
 .tab {
@@ -324,17 +438,17 @@ const handleEvaluate = (eventId) => {
 .activity-image {
   width: 200px;
   height: 120px;
-  background: #e0e0e0;
   border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   flex-shrink: 0;
+  overflow: hidden;
+  background: #e0e0e0;
 }
 
-.image-placeholder {
-  color: #999;
-  font-size: 14px;
+.activity-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .activity-details {
@@ -508,6 +622,12 @@ const handleEvaluate = (eventId) => {
   .activity-image {
     width: 100%;
     height: 180px;
+  }
+  
+  .activity-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
 
   .activity-actions {

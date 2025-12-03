@@ -23,9 +23,7 @@
           <router-link v-if="isLoggedIn" to="/personal/activities" class="btn ghost" title="个人中心">个人中心</router-link>
           <!-- 未登录时显示登录按钮 -->
           <router-link v-else to="/login" class="btn ghost" title="登录">登录</router-link>
-          <button class="icon-btn" title="系统公告">🔔系统公告</button>
-          <!-- 已登录时显示退出按钮 -->
-          <button v-if="isLoggedIn" class="btn logout" title="退出登录" @click="handleLogout">退出</button>
+          <button class="icon-btn" title="系统公告">系统公告</button>
           <router-link
             v-if="isOrganizer"
             to="/organizer/manage"
@@ -38,6 +36,9 @@
             class="btn ghost"
             title="管理后台"
           >管理后台</router-link>
+          <!-- 已登录时显示退出按钮 -->
+          <button v-if="isLoggedIn" class="btn logout" title="退出登录" @click="handleLogout">退出</button>
+         
         </div>
       </div>
     </header>
