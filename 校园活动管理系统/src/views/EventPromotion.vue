@@ -2,17 +2,53 @@
   <div class="page">
     <NavBar />
 
-    <!-- Hero -->
-    <div v-if="heroEvent" class="activity-container">
+    <!-- Hero 轮播，展示前 3 个活动 -->
+    <div
+      v-if="heroEvents.length"
+      class="activity-container"
+      @mouseenter="stopHeroCarousel"
+      @mouseleave="startHeroCarousel"
+    >
+      <!-- 左箭头 -->
+      <button class="carousel-arrow left" @click="prevHero">
+        ‹
+      </button>
+
+      <!-- 当前活动内容 -->
       <div class="image-section">
-        <img :src="heroEvent.image" :alt="heroEvent.title" />
+        <img :src="currentHero.image" :alt="currentHero.title" />
       </div>
       <div class="content-section">
-        <h2>{{ heroEvent.title }}</h2>
-        <div v-if="heroEvent.description" v-html="formatDescription(heroEvent.description)"></div>
+        <h2>{{ currentHero.title }}</h2>
+        <div
+          v-if="currentHero.description"
+          v-html="formatDescription(currentHero.description)"
+        ></div>
         <p v-else>暂无描述</p>
-        <a @click.prevent="gotoEvent(heroEvent.id)" href="#" class="btn">查看详情 <span class="arrow">→</span></a>
+        <a
+          @click.prevent="gotoEvent(currentHero.id)"
+          href="#"
+          class="btn"
+        >
+          查看详情 <span class="arrow">→</span>
+        </a>
+
+        <!-- 小圆点指示器 -->
+        <div class="carousel-dots">
+          <span
+            v-for="(item, index) in heroEvents"
+            :key="item.id"
+            class="dot"
+            :class="{ active: index === currentHeroIndex }"
+            @click="goHero(index)"
+          ></span>
+        </div>
       </div>
+
+      <!-- 右箭头 -->
+      <button class="carousel-arrow right" @click="nextHero">
+        ›
+      </button>
     </div>
     <div v-else-if="loadingHero" class="activity-container">
       <div class="content-section" style="width: 100%; text-align: center;">
@@ -48,10 +84,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
-import gradImg from '@/assets/graduation.png'
 import { fetchEvents, fetchEventDetail } from '@/api/event'
 
 const router = useRouter()
@@ -61,7 +96,11 @@ const API_ORIGIN = (
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
 ).replace(/\/api\/?$/, '')
 
-const heroEvent = ref(null)
+const DEFAULT_COVER = `${API_ORIGIN}/uploads/3b72bdb5a6ca17d85131e816c9fdd0b1.jpg`
+
+// 轮播 Hero 区：前 3 个活动
+const heroEvents = ref([])
+const currentHeroIndex = ref(0)
 const loadingHero = ref(false)
 const events = ref([])
 const loading = ref(false)
@@ -69,7 +108,7 @@ const errorMsg = ref('')
 
 // 构建图片URL
 const buildImageUrl = (coverUrl) => {
-  if (!coverUrl) return gradImg
+  if (!coverUrl) return DEFAULT_COVER
   // 如果已经是完整URL，直接返回
   if (coverUrl.startsWith('http://') || coverUrl.startsWith('https://')) {
     return coverUrl
@@ -81,6 +120,14 @@ const buildImageUrl = (coverUrl) => {
   // 如果是相对路径，拼接API基础地址
   return API_ORIGIN + normalized
 }
+
+// 当前展示的 Hero 活动
+const currentHero = computed(() => {
+  return heroEvents.value[currentHeroIndex.value] || {}
+})
+
+// 轮播定时器
+let heroTimer = null
 
 // 格式化日期
 const formatDate = (dateString) => {
@@ -102,39 +149,25 @@ const formatDescription = (description) => {
     .join('')
 }
 
-// 加载 Hero 活动（第一个活动）
-const loadHeroEvent = async () => {
+// 加载 Hero 活动（前 3 个活动）
+const loadHeroEvents = async () => {
   loadingHero.value = true
   try {
-    const data = await fetchEvents({ page: 1, pageSize: 1 })
+    const data = await fetchEvents({ page: 1, pageSize: 3 })
     const eventList = data?.list || []
-    
-    if (eventList.length > 0) {
-      const firstEvent = eventList[0]
-      // 获取活动详情以获取完整描述
-      try {
-        const detail = await fetchEventDetail(firstEvent.id)
-        heroEvent.value = {
-          id: detail.id,
-          title: detail.title || '活动标题',
-          description: detail.description || '',
-          image: buildImageUrl(detail.cover_url),
-          location: detail.location || '',
-          start_time: detail.start_time,
-          end_time: detail.end_time
-        }
-      } catch (err) {
-        // 如果获取详情失败，使用列表数据
-        heroEvent.value = {
-          id: firstEvent.id,
-          title: firstEvent.title || '活动标题',
-          description: firstEvent.description || '',
-          image: buildImageUrl(firstEvent.cover_url),
-          location: firstEvent.location || '',
-          start_time: firstEvent.start_time,
-          end_time: firstEvent.end_time
-        }
-      }
+
+    heroEvents.value = eventList.map((item) => ({
+      id: item.id,
+      title: item.title || '活动标题',
+      description: item.description || '',
+      image: buildImageUrl(item.cover_url),
+      location: item.location || '',
+      start_time: item.start_time,
+      end_time: item.end_time
+    }))
+
+    if (heroEvents.value.length > 1) {
+      startHeroCarousel()
     }
   } catch (err) {
     console.error('加载 Hero 活动失败:', err)
@@ -143,16 +176,47 @@ const loadHeroEvent = async () => {
   }
 }
 
-// 加载活动列表（只获取前8个，排除第一个）
+// 轮播控制
+const startHeroCarousel = () => {
+  if (heroEvents.value.length <= 1) return
+  if (heroTimer) return
+  heroTimer = setInterval(() => {
+    nextHero()
+  }, 3000)
+}
+
+const stopHeroCarousel = () => {
+  if (heroTimer) {
+    clearInterval(heroTimer)
+    heroTimer = null
+  }
+}
+
+const nextHero = () => {
+  if (!heroEvents.value.length) return
+  currentHeroIndex.value = (currentHeroIndex.value + 1) % heroEvents.value.length
+}
+
+const prevHero = () => {
+  if (!heroEvents.value.length) return
+  currentHeroIndex.value =
+    (currentHeroIndex.value - 1 + heroEvents.value.length) % heroEvents.value.length
+}
+
+const goHero = (index) => {
+  if (index < 0 || index >= heroEvents.value.length) return
+  currentHeroIndex.value = index
+}
+
+// 加载活动列表（展示前 8 个，包括轮播中的活动）
 const loadEvents = async () => {
   loading.value = true
   errorMsg.value = ''
   try {
-    const data = await fetchEvents({ page: 1, pageSize: 9 })
+    const data = await fetchEvents({ page: 1, pageSize: 8 })
     const eventList = data?.list || []
     
-    // 跳过第一个活动（已在 Hero 显示），只取接下来的8个活动
-    const eventsToShow = eventList.slice(1, 9)
+    const eventsToShow = eventList
     
     events.value = eventsToShow.map((item) => ({
       id: item.id,
@@ -177,8 +241,12 @@ function gotoEvent(id) {
 }
 
 onMounted(() => {
-  loadHeroEvent()
+  loadHeroEvents()
   loadEvents()
+})
+
+onUnmounted(() => {
+  stopHeroCarousel()
 })
 </script> 
 
@@ -192,7 +260,7 @@ onMounted(() => {
 .activity-container {
   display: flex;
   max-width: 1200px;
-  margin: 40px auto 0;
+  margin: 35px auto 0;
   background-color: #0053a9; /* 整个区域为蓝色背景 */
   border-radius: 8px;
   overflow: visible; /* 允许图片凸出 */
@@ -201,20 +269,24 @@ onMounted(() => {
   padding: 36px; /* 左侧留出蓝色边距 */
   column-gap: 32px;
   position: relative;
+  height: 560px; /* 固定高度，保持各轮播一致 */
 }
 
 .image-section {
   flex: 0 0 420px; /* 固定图片区宽度 */
   position: relative;
   z-index: 2;
-  align-self: center; /* 垂直居中 */
+  height: 100%;
+  display: flex;
+  align-items: center;
 }
 .image-section img {
   width: 100%;
-  height: auto;
+  height: 100%;
   display: block;
   border-radius: 6px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+  object-fit: cover;
 }
 
 .content-section {
@@ -274,14 +346,15 @@ onMounted(() => {
 
 /* 响应式 */
 @media (max-width: 900px) {
-  .activity-container { padding: 20px; column-gap: 16px; }
-  .image-section { flex-basis: 320px; align-self: center; }
+  .activity-container { padding: 20px; column-gap: 16px; height: auto; }
+  .image-section { flex-basis: 320px; align-self: center; height: auto; }
+  .image-section img { height: auto; }
   .content-section h2 { font-size: 2rem; }
 }
 
 @media (max-width: 600px) {
-  .activity-container { flex-direction: column; padding: 18px; }
-  .image-section { align-self: center; width: 100%; flex-basis: auto; }
+  .activity-container { flex-direction: column; padding: 18px; height: auto; }
+  .image-section { align-self: center; width: 100%; flex-basis: auto; height: auto; }
   .content-section { padding: 18px 8px; }
 }
 
@@ -296,6 +369,53 @@ onMounted(() => {
 .card-body .meta{color:#666;font-size:0.9rem;margin-bottom:8px}
 .card-body .excerpt{flex:1;color:#444;font-size:0.95rem}
 .card-actions{margin-top:12px;display:flex;justify-content:flex-end}
+/* 轮播箭头 */
+.carousel-arrow{
+  position:absolute;
+  top:50%;
+  transform:translateY(-50%);
+  width:40px;
+  height:40px;
+  border-radius:50%;
+  border:none;
+  background:rgba(255,255,255,0.2);
+  color:#fff;
+  font-size:24px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  transition:background .2s, transform .2s;
+  z-index:3;
+}
+.carousel-arrow.left{left:16px;}
+.carousel-arrow.right{right:16px;}
+.carousel-arrow:hover{
+  background:rgba(255,255,255,0.35);
+  transform:translateY(-50%) scale(1.05);
+}
 
+/* 轮播小圆点 */
+.carousel-dots{
+  position:absolute;
+  left:50%;
+  bottom:20px;
+  transform:translateX(-50%);
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
+.dot{
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:rgba(255,255,255,0.4);
+  cursor:pointer;
+  transition:background .2s, transform .2s;
+}
+.dot.active{
+  background:#fff;
+  transform:scale(1.2);
+}
 
 </style>

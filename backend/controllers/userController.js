@@ -154,6 +154,28 @@ exports.updateProfile = async (req, res) => {
   }
 }
 
+// 获取学院列表（供前端下拉选择使用）
+exports.getColleges = async (req, res) => {
+  try {
+    const sql = `
+      SELECT 
+        college_id AS id,
+        college_name AS name
+      FROM colleges
+      ORDER BY college_id
+    `
+
+    const list = await sequelize.query(sql, {
+      type: QueryTypes.SELECT
+    })
+
+    success(res, list || [])
+  } catch (err) {
+    console.error('获取学院列表失败:', err)
+    error(res, '服务器错误', 500)
+  }
+}
+
 // 管理员：获取用户列表
 exports.getUserList = async (req, res) => {
   try {

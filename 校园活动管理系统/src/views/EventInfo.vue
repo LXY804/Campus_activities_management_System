@@ -46,7 +46,6 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
-import gradImg from '@/assets/graduation.png'
 import { fetchEventDetail, registerEvent } from '@/api/event'
 
 const router = useRouter()
@@ -58,9 +57,11 @@ const API_ORIGIN = (
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
 ).replace(/\/api\/?$/, '')
 
+const DEFAULT_COVER = `${API_ORIGIN}/uploads/3b72bdb5a6ca17d85131e816c9fdd0b1.jpg`
+
 // 构建图片URL
 const buildImageUrl = (coverUrl) => {
-  if (!coverUrl) return gradImg
+  if (!coverUrl) return DEFAULT_COVER
   // 如果已经是完整URL，直接返回
   if (coverUrl.startsWith('http://') || coverUrl.startsWith('https://')) {
     return coverUrl

@@ -26,9 +26,9 @@
             <path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
           </svg>
           <input 
-            v-model="loginForm.userId" 
+            v-model="loginForm.username" 
             type="text" 
-            placeholder="用户ID"
+            placeholder="用户名"
             required
           />
         </div>
@@ -188,7 +188,7 @@ const isLogin = ref(true)
 const loading = ref(false)
 
 const loginForm = ref({
-  userId: '',
+  username: '',
   password: '',
   role: 'student'
 })
@@ -211,29 +211,20 @@ const persistSession = (payload, fallbackRole = 'student', fallbackUsername = ''
 }
 
 const handleLogin = async () => {
-  const { userId, password, role } = loginForm.value
+  const { username, password, role } = loginForm.value
 
-  if (!userId || !password) {
-    alert('请填写用户ID和密码')
-    return
-  }
-
-  // 验证用户ID是否为有效数字
-  const userIdNum = parseInt(userId, 10)
-  if (isNaN(userIdNum) || userIdNum <= 0) {
-    alert('用户ID必须是有效的数字')
+  if (!username || !password) {
+    alert('请填写用户名和密码')
     return
   }
 
   loading.value = true
   try {
-    const data = await login({ userId: userIdNum, password, role })
-    persistSession(data, role, data.username || `用户${userIdNum}`)
+    const data = await login({ username, password, role })
+    persistSession(data, role, data.username || username)
     alert('登录成功')
     router.push('/')
   } catch (err) {
-    // 显示后端返回的具体错误信息
-    // 响应拦截器已经将错误转换为 Error 对象，所以直接使用 err.message
     const errorMessage = err?.message || err?.response?.data?.message || '登录失败，请稍后再试'
     alert(errorMessage)
     console.error('登录错误详情:', err)

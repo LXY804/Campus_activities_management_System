@@ -116,8 +116,6 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchMyRegistrations, cancelRegistration } from '@/api/registration'
 import { fetchActivityTypes } from '@/api/event'
-import gradImg from '@/assets/graduation.png'
-
 const router = useRouter()
 const activeTab = ref('all')
 
@@ -126,10 +124,12 @@ const API_ORIGIN = (
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
 ).replace(/\/api\/?$/, '')
 
+const DEFAULT_COVER = `${API_ORIGIN}/uploads/3b72bdb5a6ca17d85131e816c9fdd0b1.jpg`
+
 // 构建图片URL
 const buildImageUrl = (coverUrl) => {
   if (!coverUrl || coverUrl === '' || coverUrl === 'null' || coverUrl === 'undefined') {
-    return gradImg
+    return DEFAULT_COVER
   }
   // 如果已经是完整URL，直接返回
   if (coverUrl.startsWith('http://') || coverUrl.startsWith('https://')) {
@@ -305,8 +305,8 @@ const handleEvaluate = (eventId) => {
 // 图片加载错误处理
 const handleImageError = (event) => {
   // 如果图片加载失败，使用默认图片
-  if (event.target.src !== gradImg) {
-    event.target.src = gradImg
+  if (event.target.src !== DEFAULT_COVER) {
+    event.target.src = DEFAULT_COVER
   }
 }
 </script>

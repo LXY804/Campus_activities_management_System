@@ -20,6 +20,23 @@ const statusExpr = `
   END
 `
 
+const workflowStatusExpr = `
+  CASE COALESCE(oac.admin_check, 1)
+    WHEN 0 THEN 'pending_review'
+    WHEN 1 THEN 'published'
+    WHEN 2 THEN 'rejected'
+    ELSE 'published'
+  END
+`
+
+const activityStatusExpr = `
+  CASE
+    WHEN NOW() < a.start_time THEN 'upcoming'
+    WHEN NOW() BETWEEN a.start_time AND a.end_time THEN 'open'
+    ELSE 'ended'
+  END
+`
+
 // 获取当前组织者发布的活动及报名统计
 exports.getMyActivities = async (req, res) => {
   try {
@@ -28,12 +45,16 @@ exports.getMyActivities = async (req, res) => {
     const sql = `
       SELECT 
         a.activity_id AS id,
+        a.activity_code AS code,
         a.activity_name AS title,
         a.location,
         a.start_time,
         a.end_time,
         a.capacity,
         c.college_name AS target_college_name,
+        ${workflowStatusExpr} AS workflow_status,
+        ${activityStatusExpr} AS status,
+        COALESCE(a.cover_image, '') AS cover_url,
         -- 报名统计
         COUNT(ua.apply_id) AS total_applications,
         SUM(CASE WHEN ua.apply_status = 0 THEN 1 ELSE 0 END) AS pending_applications,
@@ -41,8 +62,19 @@ exports.getMyActivities = async (req, res) => {
       FROM activities a
       LEFT JOIN user_activity_apply ua ON ua.activity_id = a.activity_id
       LEFT JOIN colleges c ON a.target_college_id = c.college_id
+      LEFT JOIN organizer_activity_creation oac ON oac.activity_id = a.activity_id
       WHERE a.organizer_id = ?
-      GROUP BY a.activity_id
+      GROUP BY 
+        a.activity_id,
+        a.activity_code,
+        a.activity_name,
+        a.location,
+        a.start_time,
+        a.end_time,
+        a.capacity,
+        c.college_name,
+        oac.admin_check,
+        a.cover_image
       ORDER BY a.start_time DESC
     `
 
@@ -153,6 +185,8 @@ exports.updateApplicationStatus = async (req, res) => {
     error(res, '服务器错误', 500)
   }
 }
+
+
 
 
 
