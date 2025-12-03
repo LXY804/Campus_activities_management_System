@@ -153,6 +153,13 @@ exports.getCurrentUser = async (req, res) => {
         u.email,
         u.phone,
         u.college_id,
+        u.student_id,
+        u.real_name,
+        u.gender,
+        u.id_type,
+        u.id_number,
+        u.class_name,
+        u.image,
         c.college_name
       FROM users u
       LEFT JOIN colleges c ON u.college_id = c.college_id
@@ -167,6 +174,16 @@ exports.getCurrentUser = async (req, res) => {
     if (!user) {
       return error(res, '用户不存在', 404)
     }
+
+    // 检查用户信息完善度
+    const missingFields = []
+    if (!user.student_id) missingFields.push('学号')
+    if (!user.real_name) missingFields.push('真实姓名')
+    if (!user.college_id) missingFields.push('学院')
+
+    // 添加信息完善状态
+    user.profileCompleted = missingFields.length === 0
+    user.missingFields = missingFields
 
     success(res, user)
   } catch (err) {
