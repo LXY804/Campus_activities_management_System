@@ -41,12 +41,27 @@
           <div class="photo-group">
             <label>照片</label>
             <div class="photo-container">
-              <div class="photo-placeholder">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="12" cy="7" r="4"></circle>
-                </svg>
-                <span>上传照片</span>
+              <input
+                ref="fileInput"
+                type="file"
+                accept="image/*"
+                class="hidden-file-input"
+                @change="onAvatarChange"
+              />
+              <div class="photo-placeholder" @click="triggerFileSelect">
+                <img
+                  v-if="avatarPreview"
+                  :src="avatarPreview"
+                  alt="头像预览"
+                  class="avatar-image"
+                />
+                <template v-else>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                  <span>上传照片</span>
+                </template>
               </div>
             </div>
           </div>
@@ -64,7 +79,12 @@
           </div>
           <div class="form-group">
             <label>所在学院</label>
-            <input type="text" v-model="form.college" placeholder="请输入所在学院" />
+            <select v-model="form.collegeId" class="college-select">
+              <option value="">请选择学院</option>
+              <option v-for="college in colleges" :key="college.id" :value="college.id">
+                {{ college.name }}
+              </option>
+            </select>
           </div>
         </div>
 
@@ -78,7 +98,9 @@
       </div>
 
       <div class="form-actions">
-        <button class="btn-submit" type="button">确认修改</button>
+        <button class="btn-submit" type="button" @click="handleSubmit" :disabled="loading">
+          {{ loading ? '保存中...' : '确认修改' }}
+        </button>
       </div>
 
       <div class="form-notice">
@@ -90,9 +112,18 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { fetchProfile, updateProfile, uploadAvatar, fetchColleges } from '@/api/user'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+// 后端基础地址，用于拼接头像等静态资源完整 URL
+const API_ORIGIN = (
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+).replace(/\/api\/?$/, '')
 
 const form = ref({
-  studentId: '18633178998',
+  studentId: '',
   name: '',
   role: '',
   gender: '',
@@ -100,15 +131,118 @@ const form = ref({
   idNumber: '',
   phone: '',
   email: '',
+  collegeId: '',
   college: '',
   class: ''
 })
 
-onMounted(() => {
-  const savedUsername = localStorage.getItem('username')
-  if (savedUsername) {
-    form.value.name = savedUsername
+const colleges = ref([])
+
+const loading = ref(false)
+const avatarPreview = ref('')
+const fileInput = ref(null)
+
+const requireLogin = () => {
+  if (!localStorage.getItem('token')) {
+    if (confirm('需要登录后才能查看个人信息，是否前往登录？')) {
+      router.push('/login')
+    }
+    return false
   }
+  return true
+}
+
+const loadProfile = async () => {
+  if (!requireLogin()) return
+  try {
+    const data = await fetchProfile()
+    form.value = {
+      studentId: data?.student_id || '',
+      name: data?.real_name || '',
+      role: data?.role || '',
+      gender: data?.gender || '',
+      idType: data?.id_type || '',
+      idNumber: data?.id_number || '',
+      phone: data?.phone || '',
+      email: data?.email || '',
+      collegeId: data?.college_id || '',
+      college: data?.college_name || '',
+      class: data?.class_name || ''
+    }
+    // 头像：后端字段为 image，这里拼接成完整 URL
+    avatarPreview.value = data?.image ? API_ORIGIN + data.image : ''
+  } catch (err) {
+    alert(err?.message || '加载个人信息失败')
+  }
+}
+
+const handleSubmit = async () => {
+  if (!requireLogin() || loading.value) return
+  loading.value = true
+  try {
+    await updateProfile({
+      studentId: form.value.studentId,
+      realName: form.value.name,
+      role: form.value.role,
+      gender: form.value.gender,
+      idType: form.value.idType,
+      idNumber: form.value.idNumber,
+      phone: form.value.phone,
+      email: form.value.email,
+      collegeId: form.value.collegeId,
+      className: form.value.class
+    })
+    alert('信息已更新')
+  } catch (err) {
+    alert(err?.message || '更新失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+const triggerFileSelect = () => {
+  if (!requireLogin()) return
+  fileInput.value && fileInput.value.click()
+}
+
+const onAvatarChange = async (e) => {
+  const file = e.target.files?.[0]
+  if (!file) return
+
+  // 本地预览
+  const localUrl = URL.createObjectURL(file)
+  avatarPreview.value = localUrl
+
+  try {
+    const res = await uploadAvatar(file)
+    // 用后端返回的正式地址替换本地 blob 地址
+    if (res && res.image) {
+      avatarPreview.value = API_ORIGIN + res.image
+    } else if (res?.data?.image) {
+      avatarPreview.value = API_ORIGIN + res.data.image
+    }
+    alert('头像上传成功')
+  } catch (err) {
+    alert(err?.message || '头像上传失败')
+  } finally {
+    // 允许重复选择同一文件
+    e.target.value = ''
+  }
+}
+
+// 加载学院列表
+const loadColleges = async () => {
+  try {
+    const data = await fetchColleges()
+    colleges.value = data || []
+  } catch (err) {
+    console.error('加载学院列表失败:', err)
+  }
+}
+
+onMounted(() => {
+  loadColleges()
+  loadProfile()
 })
 </script>
 
@@ -163,7 +297,8 @@ onMounted(() => {
   color: #333;
 }
 
-.form-group input {
+.form-group input,
+.form-group .college-select {
   padding: 10px 12px;
   border: 1px solid #ddd;
   border-radius: 6px;
@@ -175,13 +310,19 @@ onMounted(() => {
   max-width: 100%;
 }
 
-.form-group input:focus {
+.form-group input:focus,
+.form-group .college-select:focus {
   outline: none;
   border-color: #1565c0;
 }
 
 .form-group input::placeholder {
   color: #999;
+}
+
+.form-group .college-select {
+  background-color: white;
+  cursor: pointer;
 }
 
 /* 照片区域跨两行 */
@@ -210,8 +351,8 @@ onMounted(() => {
 }
 
 .photo-placeholder {
-  width: 135px;
-  height: 135px;
+  width: 120px;
+  height: 120px;
   border: 2px dashed #ddd;
   border-radius: 8px;
   display: flex;
@@ -223,6 +364,18 @@ onMounted(() => {
   cursor: pointer;
   transition: all 0.3s;
   transform: scale(0.9);
+}
+
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  object-fit: cover;
+  display: block;
+}
+
+.hidden-file-input {
+  display: none;
 }
 
 .photo-placeholder:hover {

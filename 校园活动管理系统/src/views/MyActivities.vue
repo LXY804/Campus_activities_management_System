@@ -4,14 +4,33 @@
     
     <!-- 标签页 -->
     <div class="tabs">
-      <button 
-        v-for="tab in tabs" 
-        :key="tab.key"
-        :class="['tab', { active: activeTab === tab.key }]"
-        @click="activeTab = tab.key"
-      >
-        {{ tab.label }}
-      </button>
+      <div class="tabs-left">
+        <button 
+          v-for="tab in tabs" 
+          :key="tab.key"
+          :class="['tab', { active: activeTab === tab.key }]"
+          @click="activeTab = tab.key"
+        >
+          {{ tab.label }}
+        </button>
+      </div>
+      <!-- 活动分类筛选 -->
+      <div class="filter-section">
+        <select 
+          v-model="selectedTypeId" 
+          class="type-select"
+          @change="handleTypeChange"
+        >
+          <option value="">全部类型</option>
+          <option 
+            v-for="type in activityTypes" 
+            :key="type.id" 
+            :value="type.id"
+          >
+            {{ type.name }}
+          </option>
+        </select>
+      </div>
     </div>
 
     <!-- 活动列表（可滚动区域） -->
@@ -25,13 +44,16 @@
           <div class="activity-info">
             <div class="activity-id">活动编号: {{ activity.id }}</div>
             <div class="activity-image">
-              <div class="image-placeholder">活动图片</div>
+              <img :src="buildImageUrl(activity.image)" alt="活动图片" @error="handleImageError($event)" />
             </div>
             <div class="activity-details">
               <h3 class="activity-name">{{ activity.name }}</h3>
               <div class="activity-meta">
                 <span class="meta-item">参与人数: {{ activity.participants }}</span>
                 <span class="meta-item">活动状态: {{ activity.status }}</span>
+                <span class="meta-item">
+                  报名状态: {{ registrationStatusLabelMap[activity.registrationStatus] || '未知' }}
+                </span>
               </div>
               <div class="activity-info-text">
                 <span>学院: {{ activity.college }}</span>
@@ -42,32 +64,35 @@
             </div>
           </div>
           <div class="activity-actions">
-            <button 
-              v-if="activity.canRegister && activity.status !== '进行中'" 
+            <!-- 只有活动未结束时才显示取消报名按钮 -->
+            <button
+              v-if="['pending','approved'].includes(activity.registrationStatus) && !['ended', 'finished'].includes(activity.eventStatus)"
               class="btn-action btn-register"
-              @click="activity.status === '未开始' ? openCancelModal(activity.id) : handleRegister(activity.id)"
+              @click="openCancelModal(activity.id)"
             >
-              {{ activity.status === '未开始' ? '取消报名' : '点击报名' }}
+              {{ activity.registrationStatus === 'pending' ? '撤回申请' : '取消报名' }}
             </button>
-            <button 
-              v-else-if="activity.status === '进行中'"
+            <button
+              v-else-if="!['ended', 'finished'].includes(activity.eventStatus)"
               class="btn-action btn-disabled"
               disabled
             >
-              正在进行
+              {{ activity.registrationStatus === 'cancelled' ? '已取消' : '不可操作' }}
             </button>
             <button 
               v-if="activity.canEvaluate" 
               class="btn-action btn-evaluate"
-              @click="handleEvaluate(activity.id)"
+              @click="handleEvaluate(activity.eventId)"
             >
-              点击评价
+              去评价
             </button>
           </div>
         </div>
       </div>
       <!-- 空状态 -->
-      <div v-if="filteredActivities.length === 0" class="empty-state">
+      <div v-if="loading" class="empty-state">努力加载中...</div>
+      <div v-else-if="errorMsg" class="empty-state">{{ errorMsg }}</div>
+      <div v-else-if="filteredActivities.length === 0" class="empty-state">
         <p>暂无活动数据</p>
       </div>
     </div>
@@ -87,9 +112,36 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { fetchMyRegistrations, cancelRegistration } from '@/api/registration'
+import { fetchActivityTypes } from '@/api/event'
+const router = useRouter()
 const activeTab = ref('all')
+
+// 后端基础地址，用于拼接封面图片等静态资源完整 URL
+const API_ORIGIN = (
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+).replace(/\/api\/?$/, '')
+
+const DEFAULT_COVER = `${API_ORIGIN}/uploads/3b72bdb5a6ca17d85131e816c9fdd0b1.jpg`
+
+// 构建图片URL
+const buildImageUrl = (coverUrl) => {
+  if (!coverUrl || coverUrl === '' || coverUrl === 'null' || coverUrl === 'undefined') {
+    return DEFAULT_COVER
+  }
+  // 如果已经是完整URL，直接返回
+  if (coverUrl.startsWith('http://') || coverUrl.startsWith('https://')) {
+    return coverUrl
+  }
+  let normalized = coverUrl.replace(/\\/g, '/')
+  if (!normalized.startsWith('/')) {
+    normalized = '/' + normalized
+  }
+  // 如果是相对路径，拼接API基础地址
+  return API_ORIGIN + normalized
+}
 
 const tabs = [
   { key: 'all', label: '全部' },
@@ -99,81 +151,129 @@ const tabs = [
   { key: 'completed', label: '已结束' }
 ]
 
-// 模拟活动数据
-const activities = ref([
-  {
-    id: 7717789,
-    name: '活动名称活动名称活动名称活动名称活动名称活动名称',
-    participants: 7,
-    status: '进行中',
-    college: '计算机学院',
-    keywords: '技术 交流',
-    location: '图书馆报告厅',
-    time: '12月15日14:00-16:00',
-    canRegister: true,
-    canEvaluate: false,
-    tab: 'in-progress'
-  },
-  {
-    id: 7717790,
-    name: '活动名称活动名称活动名称活动名称活动名称活动名称',
-    participants: 12,
-    status: '待评价',
-    college: '机械学院',
-    keywords: '实践 创新',
-    location: '实验楼201',
-    time: '12月20日10:00-12:00',
-    canRegister: false,
-    canEvaluate: true,
-    tab: 'to-evaluate'
-  },
-  {
-    id: 7717791,
-    name: '活动名称活动名称活动名称活动名称活动名称活动名称',
-    participants: 25,
-    status: '未开始',
-    college: '管理学院',
-    keywords: '讲座 学习',
-    location: '教学楼301',
-    time: '12月25日15:00-17:00',
-    canRegister: true,
-    canEvaluate: false,
-    tab: 'not-started'
-  },
-  {
-    id: 7717792,
-    name: '活动名称活动名称活动名称活动名称活动名称活动名称',
-    participants: 18,
-    status: '已结束',
-    college: '艺术设计学院',
-    keywords: '展览 文化',
-    location: '艺术馆',
-    time: '12月10日09:00-17:00',
-    canRegister: false,
-    canEvaluate: false,
-    tab: 'completed'
+const activities = ref([])
+const loading = ref(false)
+const errorMsg = ref('')
+const activityTypes = ref([])
+const selectedTypeId = ref('')
+
+// 报名状态文案映射：pending/approved/rejected/cancelled -> 待审核/已通过/已拒绝/已取消
+const registrationStatusLabelMap = {
+  pending: '待审核',
+  approved: '已通过',
+  rejected: '已拒绝',
+  cancelled: '已取消'
+}
+
+const requireLogin = () => {
+  if (!localStorage.getItem('token')) {
+    if (confirm('此操作需要登录，是否前往登录？')) {
+      router.push('/login')
+    }
+    return false
   }
-])
+  return true
+}
+
+const statusToTab = (eventStatus, registrationStatus, hasComment) => {
+  // 报名还在待审核：只放在“全部”里，不进其他分类
+  if (registrationStatus === 'pending') return 'all'
+
+  if (['open', 'ongoing'].includes(eventStatus)) return 'in-progress'
+  if (['upcoming'].includes(eventStatus)) return 'not-started'
+  if (
+    ['finished', 'ended'].includes(eventStatus) &&
+    ['approved', 'checked_in'].includes(registrationStatus)
+  ) {
+    // 已结束且已通过：如果还没评论 -> 待评价；如果已评论 -> 已结束
+    return hasComment ? 'completed' : 'to-evaluate'
+  }
+  if (['finished', 'ended', 'cancelled'].includes(eventStatus)) return 'completed'
+  return 'all'
+}
+
+const statusLabelMap = {
+  open: '进行中',
+  ongoing: '进行中',
+  upcoming: '未开始',
+  finished: '已结束',
+  ended: '已结束',
+  cancelled: '已取消'
+}
+
+const loadActivities = async () => {
+  if (!requireLogin()) return
+  loading.value = true
+  errorMsg.value = ''
+  try {
+    const data = await fetchMyRegistrations()
+    activities.value =
+      data?.list?.map((item) => ({
+        id: item.registration_id,
+        eventId: item.event_id,
+        name: item.event_title,
+        image: item.cover_url || '', // 添加图片URL
+        participants: item.capacity || 0,
+        status: statusLabelMap[item.event_status] || '进行中',
+        eventStatus: item.event_status, // 保存原始状态用于判断
+        registrationStatus: item.registration_status,
+        college: item.organizer_name || '',
+        keywords: '',
+        location: item.location,
+        time: item.start_time ? new Date(item.start_time).toLocaleString() : '',
+        type_id: item.type_id, // 保存活动类型ID用于筛选
+        canRegister: ['pending'].includes(item.registration_status),
+        // 只有结束且通过且尚未评论的活动才可评价
+        canEvaluate:
+          ['finished', 'ended'].includes(item.event_status) &&
+          ['approved', 'checked_in'].includes(item.registration_status) &&
+          !item.has_comment,
+        tab: statusToTab(item.event_status, item.registration_status, item.has_comment)
+      })) || []
+  } catch (err) {
+    console.error(err)
+    errorMsg.value = err?.message || '加载报名列表失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+const loadActivityTypes = async () => {
+  try {
+    const types = await fetchActivityTypes()
+    activityTypes.value = types || []
+  } catch (err) {
+    console.error('加载活动类型失败:', err)
+  }
+}
+
+const handleTypeChange = () => {
+  // 类型筛选在前端 computed 中处理，这里不需要重新加载数据
+}
+
+onMounted(() => {
+  loadActivityTypes()
+  loadActivities()
+})
 
 const filteredActivities = computed(() => {
-  if (activeTab.value === 'all') {
-    return activities.value
+  let result = activities.value
+  
+  // 按状态标签筛选
+  if (activeTab.value !== 'all') {
+    result = result.filter((activity) => activity.tab === activeTab.value)
   }
-  return activities.value.filter(activity => activity.tab === activeTab.value)
+  
+  // 按活动类型筛选
+  if (selectedTypeId.value) {
+    result = result.filter((activity) => activity.type_id === parseInt(selectedTypeId.value))
+  }
+  
+  return result
 })
 
 const cancelModalVisible = ref(false)
 const selectedActivityId = ref(null)
-
-const handleRegister = (id) => {
-  alert(`报名活动 ${id}`)
-  // 这里可以添加报名逻辑
-}
-
-const handleEvaluate = (id) => {
-  alert(`评价活动 ${id}`)
-  // 这里可以添加评价逻辑
-}
 
 const openCancelModal = (id) => {
   selectedActivityId.value = id
@@ -185,10 +285,29 @@ const closeCancelModal = () => {
   selectedActivityId.value = null
 }
 
-const confirmCancel = () => {
-  // TODO: 调用取消报名接口
-  cancelModalVisible.value = false
-  selectedActivityId.value = null
+const confirmCancel = async () => {
+  if (!selectedActivityId.value) return
+  try {
+    await cancelRegistration(selectedActivityId.value)
+    alert('已取消报名')
+    await loadActivities()
+  } catch (err) {
+    alert(err?.message || '取消失败')
+  } finally {
+    closeCancelModal()
+  }
+}
+
+const handleEvaluate = (eventId) => {
+  router.push({ name: 'EventEvaluate', params: { id: eventId } })
+}
+
+// 图片加载错误处理
+const handleImageError = (event) => {
+  // 如果图片加载失败，使用默认图片
+  if (event.target.src !== DEFAULT_COVER) {
+    event.target.src = DEFAULT_COVER
+  }
 }
 </script>
 
@@ -206,9 +325,41 @@ const confirmCancel = () => {
 
 .tabs {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   border-bottom: 2px solid #eee;
   margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.tabs-left {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+}
+
+.filter-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.type-select {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fff;
+  font-size: 16px;
+  color: #333;
+  cursor: pointer;
+  min-width: 150px;
+  transition: border-color 0.2s;
+}
+
+.type-select:focus {
+  outline: none;
+  border-color: #1565c0;
 }
 
 .tab {
@@ -287,17 +438,17 @@ const confirmCancel = () => {
 .activity-image {
   width: 200px;
   height: 120px;
-  background: #e0e0e0;
   border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   flex-shrink: 0;
+  overflow: hidden;
+  background: #e0e0e0;
 }
 
-.image-placeholder {
-  color: #999;
-  font-size: 14px;
+.activity-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .activity-details {
@@ -471,6 +622,12 @@ const confirmCancel = () => {
   .activity-image {
     width: 100%;
     height: 180px;
+  }
+  
+  .activity-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
 
   .activity-actions {

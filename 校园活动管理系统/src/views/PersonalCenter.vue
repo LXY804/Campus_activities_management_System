@@ -1,14 +1,30 @@
 <template>
-  <div class="personal-center">
-    <!-- 顶部导航栏 -->
-    <NavBar />
+  <div class="personal-center page" :style="bgStyle">
+    <div class="bg-overlay"></div>
+    <div class="content">
+      <!-- 顶部导航栏 -->
+      <div class="nav-bar-wrapper">
+        <NavBar />
+      </div>
 
-    <div class="main-layout">
-      <!-- 左侧边栏 -->
-      <aside class="sidebar">
+      <div class="main-layout">
+        <!-- 左侧边栏 -->
+        <aside class="sidebar">
         <div class="user-info">
           <div class="user-avatar">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <img
+              v-if="avatarUrl"
+              :src="avatarUrl"
+              alt="用户头像"
+              class="avatar-image"
+            />
+            <svg
+              v-else
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
               <circle cx="12" cy="7" r="4"></circle>
             </svg>
@@ -66,12 +82,13 @@
             <span>数据统计</span>
           </router-link>
         </nav>
-      </aside>
+        </aside>
 
-      <!-- 主内容区 -->
-      <main class="main-content">
-        <router-view />
-      </main>
+        <!-- 主内容区 -->
+        <main class="main-content">
+          <router-view />
+        </main>
+      </div>
     </div>
   </div>
 </template>
@@ -80,19 +97,51 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
+import libraryImg from '@/assets/图书馆.webp'
+import { fetchProfile } from '@/api/user'
 
+const bgStyle = {
+  backgroundImage: `url(${libraryImg})`,
+  backgroundSize: 'cover',
+  backgroundPosition: 'center top',
+  backgroundRepeat: 'no-repeat',
+  backgroundAttachment: 'fixed',
+  minHeight: '100vh'
+}
 const router = useRouter()
 const username = ref('用户名')
+const avatarUrl = ref('')
 
-onMounted(() => {
+// 后端基础地址，用于拼接头像完整 URL
+const API_ORIGIN = (
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+).replace(/\/api\/?$/, '')
+
+onMounted(async () => {
   // 检查登录状态
   const isLoggedIn = localStorage.getItem('isLoggedIn')
   const savedUsername = localStorage.getItem('username')
   
   if (!isLoggedIn) {
     router.push('/login')
+    return
   } else if (savedUsername) {
     username.value = savedUsername
+  }
+
+  // 加载个人资料获取头像（以及更准确的姓名）
+  try {
+    const profile = await fetchProfile()
+    if (profile) {
+      if (profile.real_name || profile.username) {
+        username.value = profile.real_name || profile.username
+      }
+      if (profile.image) {
+        avatarUrl.value = API_ORIGIN + profile.image
+      }
+    }
+  } catch (e) {
+    // 头像加载失败不影响页面其他功能，静默忽略
   }
   
   // 如果直接访问 /personal，默认跳转到 /personal/activities
@@ -103,12 +152,41 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.personal-center {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: #f7f9fc;
-  overflow: hidden;
+
+
+.personal-center.page {
+  position: relative;
+  min-height: 100vh;
+  overflow: auto;
+}
+
+.personal-center .content{
+  position: relative;
+  z-index: 2;
+  display:flex;
+  flex-direction:column;
+  min-height:100vh;
+  padding-top:82px;
+}
+
+.nav-bar-wrapper{
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  z-index:20;
+  background:rgba(255,255,255,0.95);
+  backdrop-filter:blur(6px);
+  box-shadow:0 2px 10px rgba(0,0,0,0.08);
+}
+
+.bg-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(2px);
+  z-index: 0;
+  pointer-events: none;
 }
 
 .main-layout {
@@ -116,28 +194,33 @@ onMounted(() => {
   flex: 1;
   max-width: 1200px;
   width: 100%;
-  margin: 0 auto;
-  padding: 20px 16px;
+  margin: 16px auto 0;
+  padding: 20px 16px 40px;
   gap: 20px;
-  overflow: hidden;
+  align-items: stretch;
 }
 
 .sidebar {
-  width: 240px;
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  height: fit-content;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  width: 250px;
+  background: rgba(255,255,255,0.78);
+  border-radius: 28px;
+  padding: 36px 26px;
+  align-self: stretch;
+  box-shadow: 0 25px 45px rgba(15,35,95,0.18);
+  backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.3);
+  display:flex;
+  flex-direction:column;
+  margin-top:-20px;
 }
 
 .user-info {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20px 0;
-  border-bottom: 1px solid #eee;
-  margin-bottom: 20px;
+  padding: 24px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.5);
+  margin-bottom: 24px;
 }
 
 .user-avatar {
@@ -157,6 +240,13 @@ onMounted(() => {
   color: #666;
 }
 
+.user-avatar .avatar-image {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
 .username {
   font-size: 16px;
   font-weight: 600;
@@ -166,29 +256,31 @@ onMounted(() => {
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .sidebar-nav__item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
-  border-radius: 8px;
+  padding: 20px 16px;
+  border-radius: 14px;
   text-decoration: none;
-  color: #666;
+  color: #1c2a3c;
   transition: all 0.2s;
   font-size: 15px;
+  font-weight:600;
 }
 
 .sidebar-nav__item:hover {
-  background: #f5f5f5;
-  color: #333;
+  background: rgba(255,255,255,0.6);
+  color: #1c2a3c;
 }
 
 .sidebar-nav__item.active {
-  background: #1565c0;
+  background: linear-gradient(135deg,#195dc5,#114693);
   color: #fff;
+  box-shadow:0 10px 18px rgba(25,93,197,.3);
 }
 
 .sidebar-nav__icon {
@@ -198,10 +290,12 @@ onMounted(() => {
 
 .main-content {
   flex: 1;
-  background: white;
-  border-radius: 8px;
-  padding: 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: rgba(255,255,255,0.8);
+  border-radius: 24px;
+  padding: 32px;
+  box-shadow: 0 25px 50px rgba(15,35,95,0.15);
+  backdrop-filter: blur(10px);
+  border:1px solid rgba(255,255,255,0.35);
   overflow: hidden;
   display: flex;
   flex-direction: column;
