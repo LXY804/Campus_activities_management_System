@@ -1,6 +1,12 @@
-import './assets/main.css'
-
 import { createApp } from 'vue'
 import App from './App.vue'
+import router from './router'
 
-createApp(App).mount('#app')
+import { Grid, GridItem } from 'vant'
+import 'vant/lib/index.css' // 引入 Vant 样式
+
+createApp(App)
+  .use(router)
+  .use(Grid)
+  .use(GridItem)
+  .mount('#app')

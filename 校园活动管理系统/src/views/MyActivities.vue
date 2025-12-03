@@ -1,0 +1,510 @@
+<template>
+  <div class="my-activities">
+    <h2 class="page-title">我的活动</h2>
+    
+    <!-- 标签页 -->
+    <div class="tabs">
+      <button 
+        v-for="tab in tabs" 
+        :key="tab.key"
+        :class="['tab', { active: activeTab === tab.key }]"
+        @click="activeTab = tab.key"
+      >
+        {{ tab.label }}
+      </button>
+    </div>
+
+    <!-- 活动列表（可滚动区域） -->
+    <div class="activities-scroll">
+      <div class="activities-list">
+        <div 
+          v-for="activity in filteredActivities" 
+          :key="activity.id"
+          class="activity-card"
+        >
+          <div class="activity-info">
+            <div class="activity-id">活动编号: {{ activity.id }}</div>
+            <div class="activity-image">
+              <div class="image-placeholder">活动图片</div>
+            </div>
+            <div class="activity-details">
+              <h3 class="activity-name">{{ activity.name }}</h3>
+              <div class="activity-meta">
+                <span class="meta-item">参与人数: {{ activity.participants }}</span>
+                <span class="meta-item">活动状态: {{ activity.status }}</span>
+              </div>
+              <div class="activity-info-text">
+                <span>学院: {{ activity.college }}</span>
+                <span>关键词: {{ activity.keywords }}</span>
+                <span>地点: {{ activity.location }}</span>
+                <span>时间: {{ activity.time }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="activity-actions">
+            <button
+              v-if="['pending','approved'].includes(activity.registrationStatus)"
+              class="btn-action btn-register"
+              @click="openCancelModal(activity.id)"
+            >
+              {{ activity.registrationStatus === 'pending' ? '撤回申请' : '取消报名' }}
+            </button>
+            <button
+              v-else
+              class="btn-action btn-disabled"
+              disabled
+            >
+              {{ activity.registrationStatus === 'cancelled' ? '已取消' : '不可操作' }}
+            </button>
+            <button 
+              v-if="activity.canEvaluate" 
+              class="btn-action btn-evaluate"
+              @click="handleEvaluate(activity.eventId)"
+            >
+              去评价
+            </button>
+          </div>
+        </div>
+      </div>
+      <!-- 空状态 -->
+      <div v-if="loading" class="empty-state">努力加载中...</div>
+      <div v-else-if="errorMsg" class="empty-state">{{ errorMsg }}</div>
+      <div v-else-if="filteredActivities.length === 0" class="empty-state">
+        <p>暂无活动数据</p>
+      </div>
+    </div>
+
+    <!-- 取消报名弹窗 -->
+    <div v-if="cancelModalVisible" class="modal-mask">
+      <div class="modal-container">
+        <h3>提示</h3>
+        <p>您是否要取消活动，无故取消活动超过3次的同学在本学期将不能继续报名任何活动。</p>
+        <div class="modal-actions">
+          <button class="btn-action btn-cancel" @click="closeCancelModal">取消</button>
+          <button class="btn-action btn-confirm" @click="confirmCancel">确认</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { fetchMyRegistrations, cancelRegistration } from '@/api/registration'
+
+const router = useRouter()
+const activeTab = ref('all')
+
+const tabs = [
+  { key: 'all', label: '全部' },
+  { key: 'in-progress', label: '进行中' },
+  { key: 'not-started', label: '未开始' },
+  { key: 'to-evaluate', label: '待评价' },
+  { key: 'completed', label: '已结束' }
+]
+
+const activities = ref([])
+const loading = ref(false)
+const errorMsg = ref('')
+
+const requireLogin = () => {
+  if (!localStorage.getItem('token')) {
+    if (confirm('此操作需要登录，是否前往登录？')) {
+      router.push('/login')
+    }
+    return false
+  }
+  return true
+}
+
+const statusToTab = (eventStatus, registrationStatus) => {
+  if (['open', 'ongoing'].includes(eventStatus)) return 'in-progress'
+  if (['upcoming'].includes(eventStatus)) return 'not-started'
+  if (
+    ['finished', 'ended'].includes(eventStatus) &&
+    ['approved', 'checked_in'].includes(registrationStatus)
+  ) {
+    return 'to-evaluate'
+  }
+  if (['finished', 'ended', 'cancelled'].includes(eventStatus)) return 'completed'
+  return 'all'
+}
+
+const statusLabelMap = {
+  open: '进行中',
+  ongoing: '进行中',
+  upcoming: '未开始',
+  finished: '已结束',
+  ended: '已结束',
+  cancelled: '已取消'
+}
+
+const loadActivities = async () => {
+  if (!requireLogin()) return
+  loading.value = true
+  errorMsg.value = ''
+  try {
+    const data = await fetchMyRegistrations()
+    activities.value =
+      data?.list?.map((item) => ({
+        id: item.registration_id,
+        eventId: item.event_id,
+        name: item.event_title,
+        participants: item.capacity || 0,
+        status: statusLabelMap[item.event_status] || '进行中',
+        registrationStatus: item.registration_status,
+        college: item.organizer_name || '',
+        keywords: '',
+        location: item.location,
+        time: item.start_time ? new Date(item.start_time).toLocaleString() : '',
+        canRegister: ['pending'].includes(item.registration_status),
+        canEvaluate:
+          ['finished', 'ended'].includes(item.event_status) &&
+          ['approved', 'checked_in'].includes(item.registration_status),
+        tab: statusToTab(item.event_status, item.registration_status)
+      })) || []
+  } catch (err) {
+    console.error(err)
+    errorMsg.value = err?.message || '加载报名列表失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadActivities)
+
+const filteredActivities = computed(() => {
+  if (activeTab.value === 'all') {
+    return activities.value
+  }
+  return activities.value.filter((activity) => activity.tab === activeTab.value)
+})
+
+const cancelModalVisible = ref(false)
+const selectedActivityId = ref(null)
+
+const openCancelModal = (id) => {
+  selectedActivityId.value = id
+  cancelModalVisible.value = true
+}
+
+const closeCancelModal = () => {
+  cancelModalVisible.value = false
+  selectedActivityId.value = null
+}
+
+const confirmCancel = async () => {
+  if (!selectedActivityId.value) return
+  try {
+    await cancelRegistration(selectedActivityId.value)
+    alert('已取消报名')
+    await loadActivities()
+  } catch (err) {
+    alert(err?.message || '取消失败')
+  } finally {
+    closeCancelModal()
+  }
+}
+
+const handleEvaluate = (eventId) => {
+  router.push(`/event/${eventId}`)
+}
+</script>
+
+<style scoped>
+.my-activities {
+  min-height: 100%;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 24px;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 2px solid #eee;
+  margin-bottom: 24px;
+}
+
+.tab {
+  padding: 12px 24px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 15px;
+  color: #666;
+  transition: all 0.2s;
+  margin-bottom: -2px;
+}
+
+.tab:hover {
+  color: #1565c0;
+}
+
+.tab.active {
+  color: #1565c0;
+  border-bottom-color: #1565c0;
+  font-weight: 600;
+}
+
+.activities-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.activity-card {
+  display: flex;
+  gap: 20px;
+  padding: 20px;
+  background: #f9f9f9;
+  border-radius: 8px;
+  border: 1px solid #eee;
+  transition: box-shadow 0.2s;
+}
+
+.activity-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.activities-scroll {
+  max-height: calc(100vh - 260px);
+  overflow-y: auto;
+  padding-right: 12px;
+}
+
+.activities-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.activities-scroll::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2);
+  border-radius: 3px;
+}
+
+.activities-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.activity-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.activity-id {
+  font-size: 14px;
+  color: #999;
+}
+
+.activity-image {
+  width: 200px;
+  height: 120px;
+  background: #e0e0e0;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.image-placeholder {
+  color: #999;
+  font-size: 14px;
+}
+
+.activity-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.activity-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.activity-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 14px;
+  color: #666;
+}
+
+.meta-item {
+  padding-right: 16px;
+  border-right: 1px solid #ddd;
+}
+
+.meta-item:last-child {
+  border-right: none;
+}
+
+.activity-info-text {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 14px;
+  color: #666;
+}
+
+.activity-info-text span {
+  padding-right: 12px;
+  border-right: 1px solid #ddd;
+}
+
+.activity-info-text span:last-child {
+  border-right: none;
+}
+
+.activity-actions {
+  display: flex;
+  align-items: flex-start;
+  padding-top: 40px;
+}
+
+.btn-action {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-register {
+  background: #4caf50;
+  color: white;
+}
+
+.btn-register:hover {
+  background: #45a049;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+}
+
+.btn-evaluate {
+  background: #ff9800;
+  color: white;
+}
+
+.btn-evaluate:hover {
+  background: #f57c00;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(255, 152, 0, 0.3);
+}
+
+.btn-disabled {
+  background: #e0e0e0;
+  color: #999;
+  cursor: not-allowed;
+}
+
+.modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-container {
+  background: #fff;
+  padding: 24px;
+  border-radius: 12px;
+  width: 400px;
+  max-width: 90%;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+}
+
+.modal-container h3 {
+  margin: 0 0 12px;
+  font-size: 20px;
+  color: #333;
+}
+
+.modal-container p {
+  font-size: 14px;
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+
+.btn-cancel {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.btn-cancel:hover {
+  background: #e0e0e0;
+  box-shadow: none;
+  transform: none;
+}
+
+.btn-confirm {
+  background: #d32f2f;
+  color: #fff;
+}
+
+.btn-confirm:hover {
+  background: #b71c1c;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(211, 47, 47, 0.3);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #999;
+  font-size: 16px;
+}
+
+@media (max-width: 768px) {
+  .activity-card {
+    flex-direction: column;
+  }
+
+  .activity-image {
+    width: 100%;
+    height: 180px;
+  }
+
+  .activity-actions {
+    padding-top: 16px;
+  }
+
+  .tabs {
+    overflow-x: auto;
+  }
+
+  .tab {
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+}
+</style>
+
