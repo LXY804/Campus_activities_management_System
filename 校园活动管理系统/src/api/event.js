@@ -7,12 +7,26 @@ export const fetchEvents = (params) =>
 export const fetchEventDetail = (id) =>
   request.get(`/events/${id}`)
 
+// 获取活动类型列表
+export const fetchActivityTypes = () =>
+  request.get('/events/types')
+
 export const registerEvent = (id) =>
   request.post(`/events/${id}/register`)
 
 // 组织者提交活动（进入审核队列）
-export const createEvent = (data) =>
-  request.post('/events', data)
+export const createEvent = (data) => {
+  // 如果 data 是 FormData，直接使用
+  if (data instanceof FormData) {
+    return request.post('/events', data, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+  }
+  // 否则使用普通 JSON 提交
+  return request.post('/events', data)
+}
 
 // 组织者：获取自己提交的活动及审核状态
 export const fetchOrganizerEvents = () =>

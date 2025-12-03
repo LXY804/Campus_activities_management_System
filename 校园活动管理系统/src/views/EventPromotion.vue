@@ -3,32 +3,29 @@
     <NavBar />
 
     <!-- Hero -->
-    <div class="activity-container">
+    <div v-if="heroEvent" class="activity-container">
       <div class="image-section">
-        <img :src="gradImg" alt="毕业照" />
+        <img :src="heroEvent.image" :alt="heroEvent.title" />
       </div>
       <div class="content-section">
-        <h2>毕业典礼志愿者招募</h2>
-        <p>
-          迎新不如送别——加入毕业典礼志愿者团队，与我们一起为毕业生打造温暖、有序、难忘的仪式！岗位包括签到引导、会场秩序维护、舞台协助与来宾接待，不需要专业经验，我们提供培训与当天午餐、志愿者证书与纪念品。欢迎同学们积极报名，共同见证这一重要时刻！
-        </p>
-        <p>
-          学校将于 2025 年 12 月 1 日举办毕业典礼。现面向全校招募志愿者，诚邀热情、有责任心的你加入志愿服务团队，为毕业生和来宾提供贴心服务，帮助活动顺利进行。
-        </p>
-        <p>
-            岗位要求：
-            年满18岁，具备良好的时间观念与沟通能力；
-            能按时参加活动前的 1 次培训与全程值守（具体时段会另行通知）；
-            有团队协作精神，遇突发情况能冷静处理并服从组织安排。
-        </p>
-        <a @click.prevent="gotoEvent(heroEventId)" href="#" class="btn">查看详情 <span class="arrow">→</span></a>
+        <h2>{{ heroEvent.title }}</h2>
+        <div v-if="heroEvent.description" v-html="formatDescription(heroEvent.description)"></div>
+        <p v-else>暂无描述</p>
+        <a @click.prevent="gotoEvent(heroEvent.id)" href="#" class="btn">查看详情 <span class="arrow">→</span></a>
+      </div>
+    </div>
+    <div v-else-if="loadingHero" class="activity-container">
+      <div class="content-section" style="width: 100%; text-align: center;">
+        <p>加载中...</p>
       </div>
     </div>
 
     <!-- 下方活动列表 -->
     <section class="events-list">
       <h3>更多活动</h3>
-      <div class="events-grid">
+      <div v-if="loading" class="loading">加载中...</div>
+      <div v-else-if="errorMsg" class="error">{{ errorMsg }}</div>
+      <div v-else class="events-grid">
         <article class="event-card" v-for="ev in events" :key="ev.id">
           <div class="card-thumb">
             <img :src="ev.image" :alt="ev.title" />
@@ -43,38 +40,146 @@
           </div>
         </article>
       </div>
+      <div v-if="!loading && !errorMsg && events.length === 0" class="empty-state">
+        <p>暂无活动</p>
+      </div>
     </section>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
 import gradImg from '@/assets/graduation.png'
+import { fetchEvents, fetchEventDetail } from '@/api/event'
 
 const router = useRouter()
 
-// hero 按钮跳转的示例 id
-const heroEventId = 1
+// 后端基础地址，用于拼接封面图片等静态资源完整 URL
+const API_ORIGIN = (
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+).replace(/\/api\/?$/, '')
 
-// 模拟下方多个活动数据，后续可替换成接口请求
-const events = ref([
-  { id: 1, title: '迎新晚会', date: '2025-12-01', location: '学生活动中心', image: gradImg, excerpt: '热闹的迎新晚会，欢迎新同学加入我们。' },
-  { id: 2, title: '志愿者招募', date: '2025-12-05', location: '图书馆广场', image: gradImg, excerpt: '低门槛，高意义，加入志愿者行列。' },
-  { id: 3, title: '学术讲座', date: '2025-12-10', location: '二号报告厅', image: gradImg, excerpt: '邀请知名教授前来演讲，开放报名。' },
-  { id: 4, title: '运动会', date: '2026-01-08', location: '体育场', image: gradImg, excerpt: '校园运动会，团队竞技，热血沸腾。' },
-  { id: 5, title: '摄影比赛', date: '2026-01-20', location: '美术馆', image: gradImg, excerpt: '展示你的镜头下的校园故事。' },
-  { id: 6, title: '创客市集', date: '2026-02-10', location: '创新广场', image: gradImg, excerpt: '创意与手作的集市，摊位招募中。' }
-])
+const heroEvent = ref(null)
+const loadingHero = ref(false)
+const events = ref([])
+const loading = ref(false)
+const errorMsg = ref('')
+
+// 构建图片URL
+const buildImageUrl = (coverUrl) => {
+  if (!coverUrl) return gradImg
+  // 如果已经是完整URL，直接返回
+  if (coverUrl.startsWith('http://') || coverUrl.startsWith('https://')) {
+    return coverUrl
+  }
+  let normalized = coverUrl.replace(/\\/g, '/')
+  if (!normalized.startsWith('/')) {
+    normalized = '/' + normalized
+  }
+  // 如果是相对路径，拼接API基础地址
+  return API_ORIGIN + normalized
+}
+
+// 格式化日期
+const formatDate = (dateString) => {
+  if (!dateString) return ''
+  const date = new Date(dateString)
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
+}
+
+// 格式化描述文本，将换行符转换为段落
+const formatDescription = (description) => {
+  if (!description) return ''
+  // 将换行符转换为 <br> 或段落
+  return description
+    .split('\n')
+    .filter(line => line.trim())
+    .map(line => `<p>${line.trim()}</p>`)
+    .join('')
+}
+
+// 加载 Hero 活动（第一个活动）
+const loadHeroEvent = async () => {
+  loadingHero.value = true
+  try {
+    const data = await fetchEvents({ page: 1, pageSize: 1 })
+    const eventList = data?.list || []
+    
+    if (eventList.length > 0) {
+      const firstEvent = eventList[0]
+      // 获取活动详情以获取完整描述
+      try {
+        const detail = await fetchEventDetail(firstEvent.id)
+        heroEvent.value = {
+          id: detail.id,
+          title: detail.title || '活动标题',
+          description: detail.description || '',
+          image: buildImageUrl(detail.cover_url),
+          location: detail.location || '',
+          start_time: detail.start_time,
+          end_time: detail.end_time
+        }
+      } catch (err) {
+        // 如果获取详情失败，使用列表数据
+        heroEvent.value = {
+          id: firstEvent.id,
+          title: firstEvent.title || '活动标题',
+          description: firstEvent.description || '',
+          image: buildImageUrl(firstEvent.cover_url),
+          location: firstEvent.location || '',
+          start_time: firstEvent.start_time,
+          end_time: firstEvent.end_time
+        }
+      }
+    }
+  } catch (err) {
+    console.error('加载 Hero 活动失败:', err)
+  } finally {
+    loadingHero.value = false
+  }
+}
+
+// 加载活动列表（只获取前8个，排除第一个）
+const loadEvents = async () => {
+  loading.value = true
+  errorMsg.value = ''
+  try {
+    const data = await fetchEvents({ page: 1, pageSize: 9 })
+    const eventList = data?.list || []
+    
+    // 跳过第一个活动（已在 Hero 显示），只取接下来的8个活动
+    const eventsToShow = eventList.slice(1, 9)
+    
+    events.value = eventsToShow.map((item) => ({
+      id: item.id,
+      title: item.title,
+      date: formatDate(item.start_time),
+      location: item.location || '',
+      image: buildImageUrl(item.cover_url),
+      excerpt: item.description ? (item.description.length > 50 ? item.description.substring(0, 50) + '...' : item.description) : '暂无描述'
+    }))
+  } catch (err) {
+    console.error(err)
+    errorMsg.value = err?.message || '加载活动失败'
+  } finally {
+    loading.value = false
+  }
+}
 
 function gotoEvent(id) {
-  // 如果你已经有 /event/:id 路由，跳转到详情页
   router.push({ name: 'EventInfo', params: { id } }).catch(() => {
-    // 若未注册 EventInfo 路由，回退到 promotion
     router.push('/promotion')
   })
 }
+
+onMounted(() => {
+  loadHeroEvent()
+  loadEvents()
+})
 </script> 
 
 <style scoped>
@@ -102,8 +207,7 @@ function gotoEvent(id) {
   flex: 0 0 420px; /* 固定图片区宽度 */
   position: relative;
   z-index: 2;
-  align-self: flex-end; /* 底部与蓝色区域对齐 */
-  transform: translateY(-60px); /* 向上凸出一点 */
+  align-self: center; /* 垂直居中 */
 }
 .image-section img {
   width: 100%;
@@ -171,18 +275,19 @@ function gotoEvent(id) {
 /* 响应式 */
 @media (max-width: 900px) {
   .activity-container { padding: 20px; column-gap: 16px; }
-  .image-section { flex-basis: 320px; transform: translateY(-18px); }
+  .image-section { flex-basis: 320px; align-self: center; }
   .content-section h2 { font-size: 2rem; }
 }
 
 @media (max-width: 600px) {
   .activity-container { flex-direction: column; padding: 18px; }
-  .image-section { transform: translateY(0); width: 100%; flex-basis: auto; }
+  .image-section { align-self: center; width: 100%; flex-basis: auto; }
   .content-section { padding: 18px 8px; }
 }
 
 .events-list{max-width:1200px;margin:28px auto;padding:0 18px}
 .events-list h3{max-width:1200px;margin:0 0 14px 18px;font-size:1.4rem;color:#123}
+.loading,.error,.empty-state{text-align:center;padding:40px 20px;color:#666;font-size:16px}
 .events-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px}
 .event-card{background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,0.08);display:flex;flex-direction:column}
 .card-thumb img{width:100%;height:160px;object-fit:cover;display:block}

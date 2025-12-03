@@ -156,8 +156,18 @@
               </div>
               <div class="form-field">
                 <label>封面图片</label>
-                <input type="file" accept="image/*" @change="handleCoverUpload" />
-                <small v-if="form.coverImage">已选择：{{ form.coverImage }}</small>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  @change="handleCoverUpload" 
+                  ref="coverImageInput"
+                />
+                <div v-if="coverImagePreview" class="cover-preview">
+                  <img :src="coverImagePreview" alt="封面预览" />
+                  <button type="button" class="remove-cover-btn" @click="removeCoverImage">移除</button>
+                </div>
+                <small v-if="form.coverImage && !coverImagePreview">已选择：{{ form.coverImage }}</small>
+                <small v-else-if="!coverImagePreview" class="upload-hint">请通过文件选择器上传图片（不支持直接输入路径）</small>
               </div>
               <div class="form-field">
                 <label>附件上传</label>
@@ -213,9 +223,9 @@
                   <span>时间：{{ formatDateRange(activity.startTime, activity.endTime) }}</span>
                 </p>
                 <div class="activity-card__stats">
-                  <span>总报名：{{ activity.totalApplications || 0 }}</span>
-                  <span>待审核：{{ activity.pendingApplications || 0 }}</span>
-                  <span>已通过：{{ activity.approvedApplications || 0 }}</span>
+                  <span>总报名：{{ getActivityStats(activity.id).total }}</span>
+                  <span>待审核：{{ getActivityStats(activity.id).pending }}</span>
+                  <span>已通过：{{ getActivityStats(activity.id).approved }}</span>
                 </div>
               </div>
               <div class="activity-card__action">
@@ -313,11 +323,7 @@ import { ref, reactive, onMounted } from 'vue'
 import NavBar from '@/components/NavBar.vue'
 import defaultCover from '@/assets/graduation.png'
 import libraryImg from '@/assets/图书馆.webp'
-import {
-  fetchMyActivities,
-  fetchActivityApplications,
-  updateApplicationStatus
-} from '@/api/organizer'
+import { createEvent } from '@/api/event'
 
 const bgStyle = {
   backgroundImage: `url(${libraryImg})`,
@@ -359,84 +365,205 @@ const getDefaultForm = () => ({
 // 表单数据
 const form = reactive(getDefaultForm())
 
-// 我的活动列表（从后端获取）
+// 我的活动列表
 const myActivities = ref([])
 
-// 初始化数据：从后端加载活动
+// 封面图片相关
+const coverImageFile = ref(null)
+const coverImagePreview = ref(null)
+const coverImageInput = ref(null)
+
+// 报名数据存储键
+const STORAGE_KEYS = {
+  activities: 'organizer_activities',
+  applications: 'organizer_applications',
+  draft: 'organizer_publish_draft'
+}
+
+// 初始化数据
 onMounted(() => {
-  loadActivitiesFromApi()
+  loadActivities()
   restoreDraft()
+  // 如果没有数据，添加一些示例数据
+  if (myActivities.value.length === 0) {
+    initSampleData()
+  }
 })
 
-const loadActivitiesFromApi = async () => {
-  try {
-    const list = await fetchMyActivities()
-    // 直接使用后端返回结构，做轻量映射以适配现有模板字段
-    myActivities.value =
-      list?.map((item) => ({
-        id: item.id,
-        title: item.title,
-        subtitle: '',
-        description: '',
-        activityType: '',
-        belongCollege: item.target_college_name || '',
-        location: item.location,
-        startTime: item.start_time,
-        endTime: item.end_time,
-        registrationDeadline: '',
-        maxParticipants: item.capacity || 0,
-        enableWaitlist: false,
-        waitlistLimit: 0,
-        needApproval: true,
-        targetColleges: [],
-        targetGrades: [],
-        detailRichText: '',
-        coverImage: '',
-        attachments: [],
-        workflowStatus: 'published',
-        registrationStatus: 'not_started',
-        createdAt: item.start_time,
-        // 报名统计
-        totalApplications: item.total_applications || 0,
-        pendingApplications: item.pending_applications || 0,
-        approvedApplications: item.approved_applications || 0
-      })) || []
-  } catch (e) {
-    console.error(e)
-    window.alert(e?.message || '加载活动失败')
+// 加载活动列表
+const loadActivities = () => {
+  const stored = localStorage.getItem(STORAGE_KEYS.activities)
+  if (stored) {
+    myActivities.value = JSON.parse(stored)
   }
 }
 
+// 保存活动列表
+const saveActivities = () => {
+  localStorage.setItem(STORAGE_KEYS.activities, JSON.stringify(myActivities.value))
+}
+
+// 初始化示例数据
+const initSampleData = () => {
+  const sampleActivity = {
+    id: Date.now(),
+    title: 'AI创新讲习营',
+    subtitle: '探索人工智能的前沿技术与应用',
+    description: '探索人工智能的前沿技术与应用',
+    activityType: '学术讲座',
+    belongCollege: '计算机学院',
+    location: '学术报告厅',
+    startTime: '2024-01-15T10:00:00',
+    endTime: '2024-01-15T17:00:00',
+    registrationDeadline: '2024-01-14T18:00:00',
+    maxParticipants: 50,
+    enableWaitlist: true,
+    waitlistLimit: 20,
+    needApproval: true,
+    targetColleges: ['计算机学院', '软件学院'],
+    targetGrades: ['大一', '大二'],
+    detailRichText: '围绕人工智能发展趋势展开的讲习营，大咖分享+实战体验。',
+    coverImage: '',
+    attachments: [],
+    workflowStatus: 'pending_review',
+    registrationStatus: 'not_started',
+    createdAt: new Date().toISOString()
+  }
+  myActivities.value = [sampleActivity]
+  saveActivities()
+}
+
 // 提交活动表单
-// 目前发布活动仍是前端示例表单，这里只做本地提示
-const handleSubmit = () => {
-  window.alert('当前发布活动功能尚未接入后端，主要演示报名审核流程')
+const handleSubmit = async () => {
+  // 验证必填字段
+  if (!form.title || !form.activityType || !form.startTime || !form.endTime) {
+    window.alert('请填写必填字段')
+    return
+  }
+
+  try {
+    const formData = new FormData()
+    formData.append('title', form.title)
+    formData.append('description', form.description || form.detailRichText || '')
+    formData.append('activityType', form.activityType)
+    formData.append('belongCollege', form.belongCollege || '')
+    formData.append('location', form.location || '')
+    formData.append('startTime', form.startTime)
+    formData.append('endTime', form.endTime)
+    formData.append('maxParticipants', form.maxParticipants || 0)
+
+    if (coverImageFile.value) {
+      formData.append('coverImage', coverImageFile.value)
+    }
+
+    await createEvent(formData)
+    window.alert('活动已提交，请等待管理员审核')
+    currentView.value = 'review'
+    resetForm()
+    clearDraft()
+  } catch (err) {
+    window.alert(err?.message || '提交失败，请重试')
+  }
 }
 
 const handleSaveDraft = () => {
-  localStorage.setItem('organizer_publish_draft', JSON.stringify(form))
+  localStorage.setItem(STORAGE_KEYS.draft, JSON.stringify(form))
   window.alert('已保存草稿')
 }
 
+const createActivity = (workflowStatus) => {
+  const newActivity = {
+    id: Date.now(),
+    title: form.title,
+    subtitle: form.subtitle,
+    description: form.description || form.detailRichText.slice(0, 80),
+    activityType: form.activityType,
+    belongCollege: form.belongCollege,
+    location: form.location,
+    startTime: form.startTime,
+    endTime: form.endTime,
+    registrationDeadline: form.registrationDeadline,
+    maxParticipants: form.maxParticipants,
+    enableWaitlist: form.enableWaitlist,
+    waitlistLimit: form.waitlistLimit,
+    needApproval: form.needApproval,
+    targetColleges: [...form.targetColleges],
+    targetGrades: [...form.targetGrades],
+    detailRichText: form.detailRichText,
+    coverImage: form.coverImage,
+    attachments: [...form.attachments],
+    workflowStatus,
+    registrationStatus: 'not_started',
+    createdAt: new Date().toISOString()
+  }
+
+  myActivities.value.push(newActivity)
+  saveActivities()
+  resetForm()
+}
+
 const resetForm = () => {
+  // 释放预览URL
+  if (coverImagePreview.value) {
+    URL.revokeObjectURL(coverImagePreview.value)
+  }
+  coverImagePreview.value = null
+  coverImageFile.value = null
+  if (coverImageInput.value) {
+    coverImageInput.value.value = ''
+  }
   Object.assign(form, getDefaultForm())
 }
 
 const restoreDraft = () => {
-  const stored = localStorage.getItem('organizer_publish_draft')
+  const stored = localStorage.getItem(STORAGE_KEYS.draft)
   if (stored) {
     Object.assign(form, getDefaultForm(), JSON.parse(stored))
   }
 }
 
 const clearDraft = () => {
-  localStorage.removeItem('organizer_publish_draft')
+  localStorage.removeItem(STORAGE_KEYS.draft)
 }
 
 const handleCoverUpload = (event) => {
   const file = event.target.files && event.target.files[0]
   if (file) {
+    // 验证文件类型
+    if (!file.type.startsWith('image/')) {
+      window.alert('请选择图片文件')
+      event.target.value = '' // 清空选择
+      return
+    }
+    
+    // 验证文件大小（5MB）
+    if (file.size > 5 * 1024 * 1024) {
+      window.alert('图片大小不能超过 5MB')
+      event.target.value = '' // 清空选择
+      return
+    }
+    
     form.coverImage = file.name
+    coverImageFile.value = file
+    
+    // 创建预览URL
+    if (coverImagePreview.value) {
+      URL.revokeObjectURL(coverImagePreview.value)
+    }
+    coverImagePreview.value = URL.createObjectURL(file)
+  }
+}
+
+const removeCoverImage = () => {
+  // 释放预览URL
+  if (coverImagePreview.value) {
+    URL.revokeObjectURL(coverImagePreview.value)
+  }
+  coverImagePreview.value = null
+  coverImageFile.value = null
+  form.coverImage = ''
+  if (coverImageInput.value) {
+    coverImageInput.value.value = ''
   }
 }
 
@@ -445,23 +572,71 @@ const handleAttachmentUpload = (event) => {
   form.attachments = files.map(file => file.name)
 }
 
-// 打开审核面板
-const openReviewPanel = async (activity) => {
-  selectedActivity.value = activity
-  try {
-    const list = await fetchActivityApplications(activity.id)
-    currentApplications.value =
-      list?.map((item) => ({
-        id: item.id,
-        activityId: activity.id,
-        userName: item.user_name,
-        applyTime: item.apply_time,
-        status: item.status // pending / approved / rejected / cancelled
-      })) || []
-  } catch (e) {
-    console.error(e)
-    window.alert(e?.message || '加载报名列表失败')
+// 获取活动统计数据
+const getActivityStats = (activityId) => {
+  const applications = getApplicationsByActivity(activityId)
+  return {
+    total: applications.length,
+    pending: applications.filter(app => app.status === 'pending').length,
+    approved: applications.filter(app => app.status === 'approved').length,
+    rejected: applications.filter(app => app.status === 'rejected').length
   }
+}
+
+// 获取活动的报名列表
+const getApplicationsByActivity = (activityId) => {
+  const stored = localStorage.getItem(STORAGE_KEYS.applications)
+  if (!stored) return []
+  const allApplications = JSON.parse(stored)
+  return allApplications.filter(app => app.activityId === activityId)
+}
+
+// 打开审核面板
+const openReviewPanel = (activity) => {
+  selectedActivity.value = activity
+  currentApplications.value = getApplicationsByActivity(activity.id)
+  
+  // 如果没有报名数据，添加一些示例数据
+  if (currentApplications.value.length === 0) {
+    initSampleApplications(activity.id)
+    currentApplications.value = getApplicationsByActivity(activity.id)
+  }
+}
+
+// 初始化示例报名数据
+const initSampleApplications = (activityId) => {
+  const stored = localStorage.getItem(STORAGE_KEYS.applications)
+  const allApplications = stored ? JSON.parse(stored) : []
+  
+  const sampleApps = [
+    {
+      id: Date.now(),
+      activityId: activityId,
+      userName: '张三',
+      userStudentId: '2021001',
+      applyTime: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      status: 'pending'
+    },
+    {
+      id: Date.now() + 1,
+      activityId: activityId,
+      userName: '李四',
+      userStudentId: '2021002',
+      applyTime: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+      status: 'pending'
+    },
+    {
+      id: Date.now() + 2,
+      activityId: activityId,
+      userName: '王五',
+      userStudentId: '2021003',
+      applyTime: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+      status: 'approved'
+    }
+  ]
+  
+  allApplications.push(...sampleApps)
+  localStorage.setItem(STORAGE_KEYS.applications, JSON.stringify(allApplications))
 }
 
 // 关闭审核面板
@@ -471,31 +646,42 @@ const closeReviewPanel = () => {
 }
 
 // 审核通过
-const handleApprove = async (app) => {
-  if (!window.confirm('确定通过该报名申请吗？')) return
-  try {
-    await updateApplicationStatus(app.id, 'approved')
+const handleApprove = (app) => {
+  const stored = localStorage.getItem(STORAGE_KEYS.applications)
+  if (!stored) return
+  
+  const allApplications = JSON.parse(stored)
+  const index = allApplications.findIndex(a => a.id === app.id)
+  if (index !== -1) {
+    allApplications[index].status = 'approved'
+    localStorage.setItem(STORAGE_KEYS.applications, JSON.stringify(allApplications))
+    
+    // 更新当前显示的列表
     app.status = 'approved'
+    
     window.alert('已通过该报名申请')
-  } catch (e) {
-    console.error(e)
-    window.alert(e?.message || '操作失败')
   }
 }
 
 // 审核拒绝
-const handleReject = async (app) => {
+const handleReject = (app) => {
   if (!window.confirm('确定要拒绝该报名申请吗？')) {
     return
   }
-
-  try {
-    await updateApplicationStatus(app.id, 'rejected')
+  
+  const stored = localStorage.getItem(STORAGE_KEYS.applications)
+  if (!stored) return
+  
+  const allApplications = JSON.parse(stored)
+  const index = allApplications.findIndex(a => a.id === app.id)
+  if (index !== -1) {
+    allApplications[index].status = 'rejected'
+    localStorage.setItem(STORAGE_KEYS.applications, JSON.stringify(allApplications))
+    
+    // 更新当前显示的列表
     app.status = 'rejected'
+    
     window.alert('已拒绝该报名申请')
-  } catch (e) {
-    console.error(e)
-    window.alert(e?.message || '操作失败')
   }
 }
 
@@ -1086,6 +1272,41 @@ const requireImage = (path) => {
   padding-left:22px;
   color:#555;
   line-height:1.6;
+}
+
+.upload-hint {
+  color: #999;
+  font-style: italic;
+}
+
+.cover-preview {
+  margin-top: 12px;
+  position: relative;
+  display: inline-block;
+}
+
+.cover-preview img {
+  max-width: 200px;
+  max-height: 150px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  object-fit: cover;
+}
+
+.remove-cover-btn {
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.remove-cover-btn:hover {
+  background: #dc2626;
 }
 
 @media (max-width: 768px) {

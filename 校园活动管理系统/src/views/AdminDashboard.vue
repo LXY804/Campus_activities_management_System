@@ -12,17 +12,17 @@
         <a 
           class="sidebar__item"
           :class="{ active: activeMenu === 'users' }"
-          @click="activeMenu = 'users'"
+          @click.prevent="switchToUsers"
         >用户管理</a>
         <a 
           class="sidebar__item"
           :class="{ active: activeMenu === 'config' }"
-          @click="activeMenu = 'config'"
+          @click.prevent="switchToConfig"
         >系统配置</a>
         <a 
           class="sidebar__item"
           :class="{ active: activeMenu === 'stats' }"
-          @click="activeMenu = 'stats'"
+          @click.prevent="switchToStats"
         >数据统计</a>
       </nav>
     </aside>
@@ -34,7 +34,6 @@
           <p>系统审核、用户管理与平台统计</p>
         </div>
         <div class="admin-user">
-          <button class="bell">🔔</button>
           <div class="avatar">管理员</div>
         </div>
       </header>
@@ -47,8 +46,16 @@
         </article>
         <article class="admin-card">
           <h3>本月新增用户</h3>
-          <p class="admin-card__value">128</p>
-          <p class="admin-card__desc">较上月提升 24%</p>
+          <p class="admin-card__value">{{ newUsersThisMonth.count }}</p>
+          <p class="admin-card__desc" v-if="newUsersThisMonth.growthRate > 0">
+            较上月提升 {{ newUsersThisMonth.growthRate }}%
+          </p>
+          <p class="admin-card__desc" v-else-if="newUsersThisMonth.growthRate < 0">
+            较上月下降 {{ Math.abs(newUsersThisMonth.growthRate) }}%
+          </p>
+          <p class="admin-card__desc" v-else>
+            与上月持平
+          </p>
         </article>
         <article class="admin-card">
           <h3>系统运行状态</h3>
@@ -91,12 +98,20 @@
           <article class="panel">
             <header>
               <h2>用户概览</h2>
-              <span>{{ userSummary.total }} 人</span>
+              <span>{{ userStats.total }} 人</span>
             </header>
             <div class="user-summary">
-              <div v-for="item in userSummary.breakdown" :key="item.label">
-                <div class="value">{{ item.value }}</div>
-                <div class="label">{{ item.label }}</div>
+              <div>
+                <div class="value">{{ userStats.students }}</div>
+                <div class="label">学生用户</div>
+              </div>
+              <div>
+                <div class="value">{{ userStats.organizers }}</div>
+                <div class="label">组织者</div>
+              </div>
+              <div>
+                <div class="value">{{ userStats.admins }}</div>
+                <div class="label">管理员</div>
               </div>
             </div>
           </article>
@@ -111,15 +126,15 @@
           <div class="user-management">
             <div class="user-stat">
               <div class="stat-box">
-                <div class="stat-value">3680</div>
+                <div class="stat-value">{{ userStats.students || 0 }}</div>
                 <div class="stat-label">学生用户</div>
               </div>
               <div class="stat-box">
-                <div class="stat-value">420</div>
+                <div class="stat-value">{{ userStats.organizers || 0 }}</div>
                 <div class="stat-label">组织者</div>
               </div>
               <div class="stat-box">
-                <div class="stat-value">136</div>
+                <div class="stat-value">{{ userStats.admins || 0 }}</div>
                 <div class="stat-label">管理员</div>
               </div>
             </div>
@@ -132,10 +147,12 @@
                   type="text" 
                   placeholder="搜索用户名..." 
                   class="search-input"
+                  @input="debouncedLoadUsers"
                 />
                 <select 
                   v-model="userFilterRole"
                   class="role-select"
+                  @change="loadUsers"
                 >
                   <option value="全部">全部角色</option>
                   <option value="学生用户">学生用户</option>
@@ -152,7 +169,10 @@
 
             <!-- 用户列表 -->
             <ul class="user-list">
-              <li v-for="(user, idx) in filteredUsers" :key="idx">
+              <li v-if="loadingUsers" class="no-result">
+                <p>加载中...</p>
+              </li>
+              <li v-else v-for="(user, idx) in filteredUsers" :key="user.id || idx">
                 <div class="user-info">
                   <div class="user-avatar">{{ user.name.charAt(0) }}</div>
                   <div>
@@ -164,7 +184,7 @@
                   <span>{{ user.joinDate }}</span>
                 </div>
               </li>
-              <li v-if="filteredUsers.length === 0" class="no-result">
+              <li v-if="!loadingUsers && filteredUsers.length === 0" class="no-result">
                 <p>没有找到匹配的用户</p>
               </li>
             </ul>
@@ -217,7 +237,7 @@
         <article class="panel" v-if="activeMenu === 'stats'">
           <header>
             <h2>数据统计</h2>
-            <button class="btn-export">📊 导出报告</button>
+            <button class="btn-export">导出报告</button>
           </header>
 
           <!-- 时间范围选择 -->
@@ -266,12 +286,26 @@
 import { ref, computed, onMounted } from 'vue'
 import NavBar from '../components/NavBar.vue'
 import { fetchPendingEvents, approveEvent, rejectEvent } from '@/api/event'
+import { 
+  fetchUserList, 
+  fetchUserStats, 
+  fetchNewUsersThisMonth,
+  fetchSystemConfig,
+  saveSystemConfig as saveSystemConfigApi,
+  fetchActivityStats
+} from '@/api/user'
 
 // 当前活动菜单
 const activeMenu = ref('review')
 
 // 审核队列（从后端获取）
 const reviewList = ref([])
+
+// 概览统计数据
+const newUsersThisMonth = ref({
+  count: 0,
+  growthRate: 0
+})
 
 const loadPendingEvents = async () => {
   try {
@@ -289,8 +323,49 @@ const loadPendingEvents = async () => {
   }
 }
 
+// 切换到用户管理
+const switchToUsers = () => {
+  activeMenu.value = 'users'
+  // 延迟加载，确保菜单切换先完成
+  setTimeout(() => {
+    // 如果还没有加载过用户数据，则加载
+    if (userList.value.length === 0 && !loadingUsers.value) {
+      loadUsers()
+    }
+    if (userStats.value.total === 0 && userStats.value.students === 0) {
+      loadUserStats()
+    }
+  }, 0)
+}
+
+// 切换到系统配置
+const switchToConfig = () => {
+  activeMenu.value = 'config'
+  // 如果还没有加载过配置，则加载
+  if (configForm.value.maxActivityPeople === 500 && configForm.value.reviewTimeout === 48) {
+    loadSystemConfig()
+  }
+}
+
+// 切换到数据统计
+const switchToStats = () => {
+  activeMenu.value = 'stats'
+  // 如果当前统计数据为空，则加载
+  if (currentStats.value.activities === 0 && currentStats.value.participation === 0) {
+    loadActivityStats(selectedMonth.value)
+  }
+}
+
 onMounted(() => {
   loadPendingEvents()
+  loadUserStats() // 加载用户统计（用于概览卡片）
+  loadNewUsersThisMonth() // 加载本月新增用户
+  loadSystemConfig() // 加载系统配置
+  loadActivityStats(selectedMonth.value) // 加载当前月份的统计数据
+  // 如果初始菜单是用户管理，则加载数据
+  if (activeMenu.value === 'users') {
+    loadUsers()
+  }
 })
 
 // 通过审核
@@ -339,25 +414,114 @@ const showNotification = (message, type = 'info') => {
 // 用户管理的搜索和过滤
 const userSearchKey = ref('')
 const userFilterRole = ref('全部')
-const roleOptions = ['全部', '学生用户', '组织者', '管理员']
-
-const userList = ref([
-  { name: '张三', role: '学生用户', joinDate: '2024-09-15' },
-  { name: '李四', role: '组织者', joinDate: '2024-08-22' },
-  { name: '王五', role: '学生用户', joinDate: '2024-10-03' },
-  { name: '赵六', role: '管理员', joinDate: '2024-07-10' },
-  { name: '孙七', role: '学生用户', joinDate: '2024-11-01' },
-  { name: '鱼鱼鱼', role: '学生用户', joinDate: '202-1-01' }
-])
-
-// 计算过滤后的用户列表
-const filteredUsers = computed(() => {
-  return userList.value.filter(user => {
-    const matchSearch = user.name.toLowerCase().includes(userSearchKey.value.toLowerCase())
-    const matchRole = userFilterRole.value === '全部' || user.role === userFilterRole.value
-    return matchSearch && matchRole
-  })
+const userList = ref([])
+const userStats = ref({
+  total: 0,
+  students: 0,
+  organizers: 0,
+  admins: 0
 })
+const loadingUsers = ref(false)
+
+// 加载用户列表
+const loadUsers = async () => {
+  if (loadingUsers.value) return // 防止重复加载
+  loadingUsers.value = true
+  try {
+    // 构建查询参数，只包含有值的参数
+    const params = {}
+    if (userSearchKey.value) {
+      params.search = userSearchKey.value
+    }
+    if (userFilterRole.value && userFilterRole.value !== '全部') {
+      params.role = userFilterRole.value
+    }
+    params.page = 1
+    params.pageSize = 100
+    
+    console.log('请求用户列表，参数:', params)
+    const data = await fetchUserList(params)
+    console.log('用户列表响应数据:', data)
+    
+    // 确保正确处理返回的数据
+    if (data && Array.isArray(data.list)) {
+      userList.value = data.list
+    } else if (Array.isArray(data)) {
+      // 如果直接返回数组
+      userList.value = data
+    } else {
+      userList.value = []
+    }
+    console.log('设置后的用户列表:', userList.value, '数量:', userList.value.length)
+  } catch (e) {
+    console.error('加载用户列表失败:', e)
+    console.error('错误详情:', e.response?.data || e.message)
+    console.error('错误状态码:', e.response?.status)
+    // 显示错误通知，帮助调试
+    const errorMsg = e.response?.data?.message || e.message || '未知错误'
+    showNotification(`加载用户列表失败: ${errorMsg}`, 'warning')
+    userList.value = [] // 确保设置为空数组
+  } finally {
+    loadingUsers.value = false
+  }
+}
+
+// 加载用户统计
+const loadUserStats = async () => {
+  try {
+    console.log('请求用户统计')
+    const stats = await fetchUserStats()
+    console.log('用户统计响应数据:', stats)
+    userStats.value = stats || {
+      total: 0,
+      students: 0,
+      organizers: 0,
+      admins: 0
+    }
+    console.log('设置后的用户统计:', userStats.value)
+  } catch (e) {
+    console.error('加载用户统计失败:', e)
+    console.error('错误详情:', e.response?.data || e.message)
+    // 设置默认值，避免显示错误
+    userStats.value = {
+      total: 0,
+      students: 0,
+      organizers: 0,
+      admins: 0
+    }
+  }
+}
+
+// 加载本月新增用户
+const loadNewUsersThisMonth = async () => {
+  try {
+    const data = await fetchNewUsersThisMonth()
+    newUsersThisMonth.value = {
+      count: data?.newUsersThisMonth || 0,
+      growthRate: data?.growthRate || 0
+    }
+  } catch (e) {
+    console.error('加载本月新增用户失败:', e)
+    newUsersThisMonth.value = {
+      count: 0,
+      growthRate: 0
+    }
+  }
+}
+
+// 计算过滤后的用户列表（现在后端已经过滤，这里直接返回）
+const filteredUsers = computed(() => {
+  return userList.value
+})
+
+// 防抖函数，用于搜索
+let searchTimer = null
+const debouncedLoadUsers = () => {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    loadUsers()
+  }, 500)
+}
 
 // 系统配置表单
 const configForm = ref({
@@ -367,8 +531,32 @@ const configForm = ref({
   maintenanceMode: false
 })
 
+// 加载系统配置
+const loadSystemConfig = async () => {
+  try {
+    const data = await fetchSystemConfig()
+    if (data) {
+      configForm.value = {
+        maxActivityPeople: data.maxActivityPeople || 500,
+        reviewTimeout: data.reviewTimeout || 48,
+        emailNotification: data.emailNotification !== undefined ? data.emailNotification : true,
+        maintenanceMode: data.maintenanceMode || false
+      }
+    }
+  } catch (e) {
+    console.error('加载系统配置失败:', e)
+    // 使用默认值
+    configForm.value = {
+      maxActivityPeople: 500,
+      reviewTimeout: 48,
+      emailNotification: true,
+      maintenanceMode: false
+    }
+  }
+}
+
 // 保存系统配置
-const saveConfig = () => {
+const saveConfig = async () => {
   // 验证表单
   if (configForm.value.maxActivityPeople < 10 || configForm.value.maxActivityPeople > 10000) {
     showNotification('最大活动人数必须在 10-10000 之间', 'warning')
@@ -379,25 +567,14 @@ const saveConfig = () => {
     return
   }
   
-  // 保存到 localStorage
-  localStorage.setItem('adminConfig', JSON.stringify(configForm.value))
-  showNotification('✓ 系统配置已保存', 'success')
-}
-
-// 初始化配置（从 localStorage 加载）
-const initConfig = () => {
-  const saved = localStorage.getItem('adminConfig')
-  if (saved) {
-    try {
-      configForm.value = JSON.parse(saved)
-    } catch (e) {
-      console.error('配置加载失败', e)
-    }
+  try {
+    await saveSystemConfigApi(configForm.value)
+    showNotification('✓ 系统配置已保存', 'success')
+  } catch (e) {
+    console.error('保存系统配置失败:', e)
+    showNotification('保存系统配置失败: ' + (e.response?.data?.message || e.message || '未知错误'), 'warning')
   }
 }
-
-// 组件初始化时加载配置
-initConfig()
 
 // 数据统计相关
 // 获取当前年月（格式：YYYY-MM）
@@ -411,60 +588,50 @@ const getCurrentMonth = () => {
 // 选中的月份
 const selectedMonth = ref(getCurrentMonth())
 
-// Mock 数据：不同月份的统计数据
-const statsDataByMonth = {
-  '2024-09': { activities: 28, participation: 72, rating: 4.3 },
-  '2024-10': { activities: 35, participation: 75, rating: 4.5 },
-  '2024-11': { activities: 42, participation: 78, rating: 4.6 },
-  '2024-12': { activities: 50, participation: 82, rating: 4.8 },
-  '2025-01': { activities: 38, participation: 76, rating: 4.4 },
-  '2025-02': { activities: 45, participation: 80, rating: 4.7 },
-}
-
-// 获取默认数据（当前月份如果没有数据）
-const getDefaultStats = () => ({
-  activities: Math.floor(Math.random() * 40) + 30,
-  participation: Math.floor(Math.random() * 20) + 70,
-  rating: (Math.random() * 0.8 + 4.0).toFixed(1)
+// 当前统计数据
+const currentStats = ref({
+  activities: 0,
+  participation: 0,
+  rating: '0.0'
 })
 
-// 当前统计数据
-const currentStats = ref(statsDataByMonth[selectedMonth.value] || getDefaultStats())
+// 加载统计数据
+const loadActivityStats = async (month = null) => {
+  try {
+    const params = month ? { month } : {}
+    const data = await fetchActivityStats(params)
+    currentStats.value = {
+      activities: data?.activities || 0,
+      participation: data?.participation || 0,
+      rating: data?.rating || '0.0'
+    }
+  } catch (e) {
+    console.error('加载活动统计失败:', e)
+    currentStats.value = {
+      activities: 0,
+      participation: 0,
+      rating: '0.0'
+    }
+  }
+}
 
 // 更新统计数据
 const updateStatsData = () => {
-  const stats = statsDataByMonth[selectedMonth.value]
-  if (stats) {
-    currentStats.value = stats
+  if (selectedMonth.value) {
+    loadActivityStats(selectedMonth.value)
+    showNotification(`已切换到 ${selectedMonth.value} 的数据`, 'info')
   } else {
-    currentStats.value = getDefaultStats()
+    loadActivityStats() // 不传月份参数，获取全部数据
   }
-  showNotification(`已切换到 ${selectedMonth.value} 的数据`, 'info')
 }
 
 // 显示全部数据（统计所有月份的数据）
 const showAllData = () => {
-  const allActivities = Object.values(statsDataByMonth).reduce((sum, stats) => sum + stats.activities, 0)
-  const avgParticipation = Math.round(Object.values(statsDataByMonth).reduce((sum, stats) => sum + stats.participation, 0) / Object.keys(statsDataByMonth).length)
-  const avgRating = (Object.values(statsDataByMonth).reduce((sum, stats) => sum + parseFloat(stats.rating), 0) / Object.keys(statsDataByMonth).length).toFixed(1)
-  
-  currentStats.value = {
-    activities: allActivities,
-    participation: avgParticipation,
-    rating: avgRating
-  }
   selectedMonth.value = ''
+  loadActivityStats() // 不传月份参数，获取全部数据
   showNotification('已显示全部数据统计', 'success')
 }
 
-const userSummary = {
-  total: 4236,
-  breakdown: [
-    { label: '学生用户', value: 3680 },
-    { label: '组织者', value: 420 },
-    { label: '管理员', value: 136 }
-  ]
-}
 </script>
 
 <style scoped>

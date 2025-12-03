@@ -1,6 +1,7 @@
 const sequelize = require('../config/database')
 const { QueryTypes } = require('sequelize')
 const { success, error } = require('../utils/response')
+const path = require('path')
 
 const registrationStatusExpr = `
   CASE ua.apply_status
@@ -38,6 +39,28 @@ const getCollegeIdByName = async (collegeName) => {
   return row?.college_id || null
 }
 
+// 获取活动类型列表
+exports.getActivityTypes = async (req, res) => {
+  try {
+    const sql = `
+      SELECT 
+        type_id AS id,
+        type_name AS name,
+        description
+      FROM activity_types
+      ORDER BY type_id ASC
+    `
+    const types = await sequelize.query(sql, {
+      type: QueryTypes.SELECT
+    })
+
+    success(res, types)
+  } catch (err) {
+    console.error('获取活动类型列表错误:', err)
+    error(res, '服务器错误', 500)
+  }
+}
+
 // 生成活动编码
 const generateActivityCode = () => {
   const now = new Date()
@@ -72,6 +95,13 @@ exports.createEvent = async (req, res) => {
 
     const activityCode = generateActivityCode()
 
+    // 处理封面图片上传
+    let coverImagePath = null
+    if (req.file) {
+      // 构建相对路径，用于存储在数据库中
+      coverImagePath = path.posix.join('/uploads', req.file.filename)
+    }
+
     // 创建活动
     const insertActivitySql = `
       INSERT INTO activities (
@@ -84,8 +114,9 @@ exports.createEvent = async (req, res) => {
         location,
         target_college_id,
         capacity,
-        organizer_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        organizer_id,
+        cover_image
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
 
     const [activityId] = await sequelize.query(insertActivitySql, {
@@ -99,7 +130,8 @@ exports.createEvent = async (req, res) => {
         location || '',
         targetCollegeId,
         Number.isFinite(maxParticipants) && maxParticipants > 0 ? maxParticipants : 0,
-        organizerId
+        organizerId,
+        coverImagePath
       ],
       type: QueryTypes.INSERT
     })
@@ -145,39 +177,41 @@ exports.getEventList = async (req, res) => {
     const replacements = []
 
     if (status) {
-      whereClause += ' AND status = ?'
+      whereClause += ' AND v.status = ?'
       replacements.push(status)
     }
 
     if (category_id) {
-      whereClause += ' AND type_id = ?'
+      whereClause += ' AND v.type_id = ?'
       replacements.push(category_id)
     }
 
     const listSql = `
       SELECT 
-        id,
-        code,
-        title,
-        description,
-        location,
-        start_time,
-        end_time,
-        capacity,
-        type_id,
-        status,
-        organizer_name,
-        target_college_name,
-        signed_up
-      FROM v_activity_overview
+        v.id,
+        v.code,
+        v.title,
+        v.description,
+        v.location,
+        v.start_time,
+        v.end_time,
+        v.capacity,
+        v.type_id,
+        v.status,
+        v.organizer_name,
+        v.target_college_name,
+        v.signed_up,
+        COALESCE(a.cover_image, '') AS cover_url
+      FROM v_activity_overview v
+      INNER JOIN activities a ON v.id = a.activity_id
       ${whereClause}
-      ORDER BY start_time DESC
+      ORDER BY v.start_time DESC
       LIMIT ? OFFSET ?
     `
 
     const countSql = `
       SELECT COUNT(*) AS total
-      FROM v_activity_overview
+      FROM v_activity_overview v
       ${whereClause}
     `
 
@@ -209,27 +243,32 @@ exports.getEventDetail = async (req, res) => {
 
     const sql = `
       SELECT 
-        id,
-        code,
-        title,
-        description,
-        location,
-        start_time,
-        end_time,
-        capacity,
-        type_id,
-        status,
-        organizer_name,
-        target_college_name,
-        signed_up
-      FROM v_activity_overview
-      WHERE id = ?
+        v.id,
+        v.code,
+        v.title,
+        v.description,
+        v.location,
+        v.start_time,
+        v.end_time,
+        v.capacity,
+        v.type_id,
+        v.status,
+        v.organizer_name,
+        v.target_college_name,
+        v.signed_up,
+        COALESCE(a.cover_image, '') AS cover_url
+      FROM v_activity_overview v
+      INNER JOIN activities a ON v.id = a.activity_id
+      WHERE v.id = ?
     `
 
-    const [event] = await sequelize.query(sql, {
+    const results = await sequelize.query(sql, {
       replacements: [id],
       type: QueryTypes.SELECT
     })
+
+    // QueryTypes.SELECT 直接返回结果数组，取第一个元素
+    const event = results && results.length > 0 ? results[0] : null
 
     if (!event) {
       return error(res, '活动不存在', 404)
@@ -238,6 +277,8 @@ exports.getEventDetail = async (req, res) => {
     success(res, event)
   } catch (err) {
     console.error('获取活动详情错误:', err)
+    console.error('错误详情:', err.message)
+    console.error('错误堆栈:', err.stack)
     error(res, '服务器错误', 500)
   }
 }
